@@ -20,20 +20,24 @@ def main():
         print("エラー: .env ファイルに必要な設定が不足しています。")
         sys.exit(1)
 
-    print("=== Instagram Comment Scraper 起動 ===")
+    print("=== Instagram Comment Scraper (Latest Post) 起動 ===")
 
-    # スプレッドシートマネージャーの初期化
-    ss_manager = SpreadsheetManager(spreadsheet_key, service_account_file)
+    try:
+        # スプレッドシートマネージャーの初期化
+        ss_manager = SpreadsheetManager(spreadsheet_key, service_account_file)
+    except Exception as e:
+        print(f"初期化エラー: {e}")
+        return
     
-    # 処理対象URLの取得
-    targets = ss_manager.get_target_urls()
-    if not targets:
-        print("処理対象のURLが見つかりませんでした。")
+    # ターゲットユーザーIDの取得
+    user_ids = ss_manager.get_target_user_ids()
+    if not user_ids:
+        print("処理対象のユーザーIDが見つかりませんでした。")
         return
 
-    print(f"{len(targets)} 件の投稿を処理します。")
+    print(f"{len(user_ids)} 名のユーザーを処理します。")
 
-    # スクレイパーの初期化とログイン
+    # スクレイパーの初期化
     scraper = InstagramScraper(ig_username, ig_password)
     
     with sync_playwright() as playwright:
@@ -41,28 +45,30 @@ def main():
             print("ログインに失敗したため、処理を中断します。")
             return
 
-        # 各投稿のコメント数を取得して更新
-        for record in targets:
-            url = record.get('URL') or record.get('url')
-            row_index = record.get('row_index')
-
-            if not url:
-                print(f"警告: {row_index}行目にURLが指定されていません。スキップします。")
-                continue
-
-            print(f"\n[{row_index}行目] 処理開始: {url}")
+        for user_id in user_ids:
+            print(f"\n--- ユーザー処理開始: {user_id} ---")
             
-            # コメント数の取得
-            comment_count = scraper.get_comment_count(url)
+            # 1. 最新投稿URLの取得
+            post_url, status = scraper.get_latest_post_url(user_id)
             
-            if comment_count is not None:
-                # スプレッドシートの更新
-                if ss_manager.update_comment_count(row_index, comment_count):
-                    print(f"成功: {row_index}行目を更新しました（コメント数: {comment_count}）")
+            comment_count = "-"
+            if post_url:
+                # 2. コメント数の取得
+                count, comment_status = scraper.get_comment_count(post_url)
+                if count is not None:
+                    comment_count = count
+                    status = "成功"
                 else:
-                    print(f"失敗: {row_index}行目の更新に失敗しました。")
+                    status = comment_status
             else:
-                print(f"失敗: {row_index}行目のコメント数取得に失敗しました。")
+                # 投稿URLが取得できなかった場合は、その理由がstatusに入っている
+                post_url = "-"
+            
+            # 3. 結果を「出力結果」シートに追記
+            if ss_manager.append_result(user_id, post_url, comment_count, status):
+                print(f"結果を記録しました: {status}")
+            else:
+                print(f"結果の記録に失敗しました。")
 
         scraper.close()
 

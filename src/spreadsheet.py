@@ -1,52 +1,54 @@
 import gspread
 from google.oauth2.service_account import Credentials
 from typing import List, Dict, Any
+from datetime import datetime
 
 class SpreadsheetManager:
     """
     Googleスプレッドシートの読み書きを管理するクラス
     """
     def __init__(self, spreadsheet_key: str, service_account_file: str):
-        # サービスアカウントのスコープ設定
         self.scopes: List[str] = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
-        # 認証情報の設定
         self.credentials = Credentials.from_service_account_file(
             service_account_file,
             scopes=self.scopes
         )
-        # gspreadクライアントの初期化
         self.client = gspread.authorize(self.credentials)
-        # スプレッドシートを開く
         self.spreadsheet = self.client.open_by_key(spreadsheet_key)
-        self.worksheet = self.spreadsheet.get_worksheet(0)  # 最初のシートを使用
+        
+        # シートの取得（存在しない場合はエラーになるため、事前に名前を確認することを推奨）
+        try:
+            self.target_sheet = self.spreadsheet.worksheet("ターゲット")
+            self.result_sheet = self.spreadsheet.worksheet("出力結果")
+        except gspread.exceptions.WorksheetNotFound:
+            print("エラー: 'ターゲット' または '出力結果' シートが見つかりません。")
+            raise
 
-    def get_target_urls(self) -> List[Dict[str, Any]]:
+    def get_target_user_ids(self) -> List[str]:
         """
-        スプレッドシートからターゲットURLのリストを取得する
-        想定フォーマット: 1行目がヘッダー、A列にURL、B列にコメント数
+        「ターゲット」シートのA列からユーザーIDのリストを取得する（ヘッダーを除く）
         """
         try:
-            # 全データを取得
-            records = self.worksheet.get_all_records()
-            # 行番号（1-indexed, ヘッダー込みなので+2）を付与して返す
-            for i, record in enumerate(records):
-                record['row_index'] = i + 2
-            return records
+            # A列（1列目）の値をすべて取得し、1行目（ヘッダー）を除外
+            values = self.target_sheet.col_values(1)
+            return values[1:] if len(values) > 1 else []
         except Exception as e:
-            print(f"スプレッドシートの読み込み中にエラーが発生しました: {e}")
+            print(f"ターゲットユーザーIDの取得中にエラーが発生しました: {e}")
             return []
 
-    def update_comment_count(self, row_index: int, comment_count: int) -> bool:
+    def append_result(self, user_id: str, post_url: str, comment_count: Any, status: str) -> bool:
         """
-        指定した行のコメント数を更新する
-        B列（2列目）を更新対象とする
+        「出力結果」シートに結果を追記する
+        フォーマット: [取得日時, ターゲットユーザーID, 取得した最新投稿URL, コメント数, ステータス]
         """
         try:
-            self.worksheet.update_cell(row_index, 2, comment_count)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            row = [now, user_id, post_url, comment_count, status]
+            self.result_sheet.append_row(row)
             return True
         except Exception as e:
-            print(f"{row_index}行目の更新中にエラーが発生しました: {e}")
+            print(f"結果の追記中にエラーが発生しました ({user_id}): {e}")
             return False
