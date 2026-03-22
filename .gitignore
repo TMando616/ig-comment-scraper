@@ -9,6 +9,7 @@ env/
 
 # Environment variables
 .env
+state.json
 
 # Google Service Account Key
 service_account.json
