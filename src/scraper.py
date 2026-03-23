@@ -49,13 +49,15 @@ class InstagramScraper:
             page.wait_for_load_state("networkidle")
             time.sleep(3)  # 画面が安定するまで待機
 
-            # ログインが必要か判定（ユーザー名またはメールアドレス入力フィールドがあるか）
+            # ログインが必要か判定（ユーザー名、メールアドレス、パスワード入力フィールドがあるか）
             user_input = page.query_selector('input[name="username"], input[name="email"]')
-            if user_input:
+            pass_input = page.query_selector('input[name="password"]')
+            
+            if user_input and pass_input:
                 print("ログイン情報を入力中...")
                 user_input.fill(self.username)
                 time.sleep(1)
-                page.fill('input[name="password"]', self.password)
+                pass_input.fill(self.password)
                 time.sleep(2)  # 入力後の安定待ち
                 
                 self._take_screenshot(page, "step1_login_input")
