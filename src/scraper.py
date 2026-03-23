@@ -46,16 +46,23 @@ class InstagramScraper:
 
             page = self.context.new_page()
             page.goto("https://www.instagram.com/")
+            page.wait_for_load_state("networkidle")
+            time.sleep(3)  # 画面が安定するまで待機
 
-            if page.query_selector('input[name="username"]'):
+            # ログインが必要か判定（ユーザー名またはメールアドレス入力フィールドがあるか）
+            user_input = page.query_selector('input[name="username"], input[name="email"]')
+            if user_input:
                 print("ログイン情報を入力中...")
-                page.fill('input[name="username"]', self.username)
+                user_input.fill(self.username)
+                time.sleep(1)
                 page.fill('input[name="password"]', self.password)
+                time.sleep(2)  # 入力後の安定待ち
+                
                 self._take_screenshot(page, "step1_login_input")
                 page.click('button[type="submit"]')
                 
                 page.wait_for_load_state("networkidle")
-                time.sleep(5)
+                time.sleep(5)  # ログイン遷移待ち
 
                 self.context.storage_state(path=self.state_file)
                 print("セッション情報を保存しました。")
