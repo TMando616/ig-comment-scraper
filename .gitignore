@@ -12,7 +12,7 @@ env/
 state.json
 
 # Google Service Account Key
-service_account.json
+credentials.json
 
 # Docker
 .docker/
