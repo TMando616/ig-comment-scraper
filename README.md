@@ -34,7 +34,7 @@ docker-compose up -d --build
 ## 実行方法
 コンテナ内でメイン処理を実行します。
 ```bash
-docker-compose exec app python main.py
+docker-compose run --rm app python src/main.py
 ```
 
 ## 詳細な実装内容
