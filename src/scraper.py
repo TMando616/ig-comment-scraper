@@ -200,6 +200,68 @@ class InstagramScraper:
         finally:
             page.close()
 
+    def get_commenting_users(self, post_url: str) -> Tuple[list[str], str]:
+        """
+        指定された投稿URLから、コメントしているユーザーのIDリストを取得する。
+        """
+        if not self.context:
+            return [], "エラー: 未ログイン"
+
+        page: Page = self.context.new_page()
+        try:
+            print(f"投稿にアクセス中: {post_url}")
+            page.goto(post_url)
+            page.wait_for_load_state("networkidle")
+            time.sleep(random.uniform(3, 5))
+            
+            # URLからスラッグを抽出してデバッグ用に使用
+            post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
+            self._take_screenshot(page, f"step4_post_{post_id}")
+
+            # 投稿者のユーザーIDを取得（通常、最初のリンクやヘッダーにある）
+            author_elem = page.query_selector('header a[role="link"], article header a')
+            author_id = ""
+            if author_elem:
+                author_id = author_elem.inner_text().strip()
+                print(f"投稿者ID: {author_id}")
+
+            # コメント投稿者の要素を探す
+            # Instagramの構造は頻繁に変わるが、通常 article 内の a[role="link"] または a 
+            # 投稿本文（最初の要素）とコメントを区別するため、特定のコンテナ内を探索
+            comment_selectors = [
+                'ul.x78zum5 li a[role="link"]', # コメント欄のリスト内
+                'article ul li span a',
+                'div[role="button"] a'
+            ]
+            
+            commenters = set()
+            
+            # ページ内のリンクを全走査して、コメント欄と思われる場所からIDを抽出
+            # ここでは単純化のため、article内の全てのユーザー名リンクを取得し、後で加工
+            user_links = page.query_selector_all('article a[role="link"]')
+            for link in user_links:
+                uid = link.inner_text().strip()
+                # 空でない、投稿者でない、かつ特定のキーワード（"プロフィール"等）でないものを収集
+                if uid and uid != author_id and len(uid) > 1:
+                    # 改行が含まれる場合は最初の行（ユーザーID）のみ取得
+                    uid = uid.split('\n')[0]
+                    # 有効なユーザーIDっぽいか簡易チェック（英数字、アンダースコア、ドット）
+                    if re.match(r'^[a-zA-Z0-9._]+$', uid):
+                        commenters.add(uid)
+
+            result_list = list(commenters)
+            print(f"コメントユーザーを {len(result_list)} 名取得しました。")
+            
+            if not result_list:
+                return [], "成功（コメントなし、または取得不能）"
+                
+            return result_list, "成功"
+
+        except Exception as e:
+            return [], f"失敗: コメントユーザー取得エラー ({str(e)})"
+        finally:
+            page.close()
+
     def get_comment_count(self, post_url: str) -> Tuple[Optional[int], str]:
         """
         指定された投稿URLからコメント数を取得する

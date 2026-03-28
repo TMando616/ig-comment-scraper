@@ -55,6 +55,7 @@ docker-compose run --rm app python src/main.py
 - **データ取得ロジック**:
   - `get_post_count`: プロフィール画面のヘッダーから総投稿数を抽出します。
   - `get_recent_post_urls`: 指定ユーザーのプロフィールページから、最新最大10件の投稿URL（`/p/` または `/reel/`）を取得します。
+  - `get_commenting_users`: 指定された投稿URLから、コメントしているユーザーのIDリストを抽出します（投稿者本人は除外）。
   - `get_comment_count`: `og:description` メタタグの正規表現マッチングによりコメント数を抽出します。
 - **デバッグ機能**:
   - 各ステップでスクリーンショットを `debug/` ディレクトリに保存します。
