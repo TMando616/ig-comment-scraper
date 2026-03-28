@@ -39,14 +39,28 @@ class SpreadsheetManager:
             print(f"ターゲットユーザーIDの取得中にエラーが発生しました: {e}")
             return []
 
-    def append_result(self, user_id: str, post_url: str, comment_count: Any, status: str) -> bool:
+    def append_results(self, rows: List[List[Any]]) -> bool:
         """
-        「出力結果」シートに結果を追記する
-        フォーマット: [取得日時, ターゲットユーザーID, 取得した最新投稿URL, コメント数, ステータス]
+        「出力結果」シートに複数の結果を一括で追記する
+        rowのフォーマット: [取得日時, ターゲットID, 投稿URL, コメントユーザーID, ステータス]
+        """
+        try:
+            if not rows:
+                return True
+            self.result_sheet.append_rows(rows)
+            return True
+        except Exception as e:
+            print(f"複数行の結果追記中にエラーが発生しました: {e}")
+            return False
+
+    def append_result(self, user_id: str, post_url: str, commenter_id: Any, status: str) -> bool:
+        """
+        「出力結果」シートに1行の結果を追記する
+        フォーマット: [取得日時, ターゲットユーザーID, 投稿URL, コメントユーザーID, ステータス]
         """
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            row = [now, user_id, post_url, comment_count, status]
+            row = [now, user_id, post_url, commenter_id, status]
             self.result_sheet.append_row(row)
             return True
         except Exception as e:

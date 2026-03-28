@@ -64,4 +64,5 @@ docker-compose run --rm app python src/main.py
 ### 3. スプレッドシート管理 (`src/spreadsheet.py`)
 - `gspread` ライブラリを使用して Google Sheets API と連携します。
 - **ターゲットシート**: A列（1行目はヘッダー）からユーザーIDを取得します。
-- **出力結果シート**: [取得日時, ターゲットID, 投稿URL, コメント数, ステータス] の形式で1行ずつ追記します。
+- **出力結果シート**: [取得日時, ターゲットID, 投稿URL, コメントしたユーザーのID, ステータス] の形式で追記します。
+- `append_results`: 複数の行を一括で追記するメソッドを実装。
