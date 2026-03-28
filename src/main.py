@@ -44,26 +44,44 @@ def main():
                 print("ログインに失敗したため、処理を中断します。")
                 return
 
+            from datetime import datetime
+            
             for user_id in user_ids:
                 print(f"\n--- ユーザー処理開始: {user_id} ---")
                 
-                post_url, status = scraper.get_latest_post_url(user_id)
+                # 1. 投稿URLを最大10件取得
+                post_urls, total_posts, profile_status = scraper.get_recent_post_urls(user_id, limit=10)
                 
-                comment_count = "-"
-                if post_url:
-                    count, comment_status = scraper.get_comment_count(post_url)
-                    if count is not None:
-                        comment_count = count
-                        status = "成功"
+                if not post_urls:
+                    # 投稿が見つからない、またはエラーの場合
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    ss_manager.append_result(user_id, "-", "-", profile_status)
+                    print(f"プロフィール処理結果: {profile_status}")
+                    continue
+
+                print(f"取得した {len(post_urls)} 件の投稿を巡回します...")
+                
+                all_rows = []
+                # 2. 各投稿URLにアクセスしてコメントユーザーを抽出
+                for post_url in post_urls:
+                    commenter_ids, comment_status = scraper.get_commenting_users(post_url)
+                    
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    if commenter_ids:
+                        for cid in commenter_ids:
+                            all_rows.append([now, user_id, post_url, cid, "成功"])
                     else:
-                        status = comment_status
-                else:
-                    post_url = "-"
+                        # コメントがない場合も1行記録（またはスキップの判断も可。ここでは記録する）
+                        all_rows.append([now, user_id, post_url, "-", comment_status])
                 
-                if ss_manager.append_result(user_id, post_url, comment_count, status):
-                    print(f"結果を記録しました: {status}")
+                # 3. スプレッドシートへ一括書き込み
+                if all_rows:
+                    if ss_manager.append_results(all_rows):
+                        print(f"結果を {len(all_rows)} 件記録しました。")
+                    else:
+                        print("スプレッドシートへの記録に失敗しました。")
                 else:
-                    print(f"結果の記録に失敗しました。")
+                    print("記録するデータがありませんでした。")
 
         except Exception as e:
             print(f"メインループ内で予期せぬエラーが発生しました: {e}")
