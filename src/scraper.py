@@ -29,8 +29,7 @@ class InstagramScraper:
 
     def login(self, playwright) -> bool:
         """
-        Instagramにログインする。既存のセッションがあれば再利用する。
-        Trace Viewer の開始処理を含む。
+        Instagramにログインする。より人間らしい挙動（タイピング遅延、待機強化）で実装。
         """
         try:
             self.browser = playwright.chromium.launch(headless=True)
@@ -47,39 +46,69 @@ class InstagramScraper:
 
             page = self.context.new_page()
             page.goto("https://www.instagram.com/")
-            page.wait_for_load_state("networkidle")
-            time.sleep(3)  # 画面が安定するまで待機
-            time.sleep(random.uniform(3, 5))  # 画面が安定するまで待機
-
-            # ログインが必要か判定（ユーザー名、メールアドレス、パスワード入力フィールドがあるか）
-            user_input = page.query_selector('input[name="username"], input[name="email"]')
-            pass_input = page.query_selector('input[name="password"]')
             
-            if user_input and pass_input:
-                print("ログイン情報を入力中...")
-                user_input.fill(self.username)
-                time.sleep(1)
-                time.sleep(random.uniform(1, 2))
-                pass_input.fill(self.password)
-                time.sleep(2)  # 入力後の安定待ち
-                time.sleep(random.uniform(2, 3))  # 入力後の安定待ち
-                
-                self._take_screenshot(page, "step1_login_input")
-                page.click('button[type="submit"]')
-                
-                page.wait_for_load_state("networkidle")
-                time.sleep(5)  # ログイン遷移待ち
-                time.sleep(random.uniform(5, 7))  # ログイン遷移待ち
+            # 1. 入力欄の表示を確実に待機
+            try:
+                page.wait_for_selector('input[name="username"]', state='visible', timeout=15000)
+            except Exception:
+                # 既にログイン済みの場合は入力欄が出ない
+                if page.query_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]'):
+                    print("既にログイン状態です。")
+                    return True
+                print("ログイン画面の読み込みに失敗しました。")
+                return False
 
-                self.context.storage_state(path=self.state_file)
-                print("セッション情報を保存しました。")
-            else:
-                print("既にログイン状態です。")
+            time.sleep(random.uniform(1, 2))
+
+            # 2. 人間らしいタイピング（1文字ずつ遅延）
+            print("ログイン情報を入力中（人間らしいタイピング）...")
             
-            self._take_screenshot(page, "step2_after_login")
+            # ユーザー名入力
+            username_field = page.locator('input[name="username"]')
+            for char in self.username:
+                username_field.type(char, delay=random.randint(100, 300))
+            
+            time.sleep(random.uniform(0.5, 1.5))
+            
+            # パスワード入力
+            password_field = page.locator('input[name="password"]')
+            for char in self.password:
+                password_field.type(char, delay=random.randint(100, 300))
+
+            self._take_screenshot(page, "step1_login_input_ready")
+            
+            # 3. ログインボタンクリックと遷移待機
+            time.sleep(random.uniform(1, 2))
+            page.click('button[type="submit"]')
+            
+            # ログイン後のホーム画面や特定の要素が出るまで待機
+            print("ログイン完了を待機中...")
+            page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=20000)
+            
+            # 4. 邪魔なポップアップの処理（「情報を保存」「通知をオン」など）
+            # 「後で」ボタンをいくつか試行
+            popups = [
+                "text='後で'", "text='Not Now'", 
+                "button:has-text('後で')", "button:has-text('Not Now')"
+            ]
+            for selector in popups:
+                try:
+                    # 短いタイムアウトで「後で」ボタンがあればクリック
+                    if page.locator(selector).is_visible(timeout=3000):
+                        print(f"ポップアップを閉じます: {selector}")
+                        page.click(selector)
+                        time.sleep(1)
+                except Exception:
+                    continue
+
+            self.context.storage_state(path=self.state_file)
+            print("ログインに成功し、セッション情報を保存しました。")
+            self._take_screenshot(page, "step2_after_login_success")
             return True
+
         except Exception as e:
             print(f"ログイン処理中にエラーが発生しました: {e}")
+            self._take_screenshot(page, "error_login_failed")
             return False
 
     def get_post_count(self, page: Page) -> int:
