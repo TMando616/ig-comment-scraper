@@ -49,37 +49,38 @@ class InstagramScraper:
             
             # 1. 入力欄の表示を確実に待機
             try:
-                page.wait_for_selector('input[name="username"]', state='visible', timeout=15000)
+                page.wait_for_selector('input[name="email"]', state='visible', timeout=15000)
             except Exception:
                 # 既にログイン済みの場合は入力欄が出ない
                 if page.query_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]'):
                     print("既にログイン状態です。")
                     return True
-                print("ログイン画面の読み込みに失敗しました。")
+                print("ログイン画面の読み込みに失敗しました（または既にログイン済みです）。")
                 return False
 
             time.sleep(random.uniform(1, 2))
 
             # 2. 人間らしいタイピング（1文字ずつ遅延）
-            print("ログイン情報を入力中（人間らしいタイピング）...")
+            print("ログイン情報を入力中（新しいセレクタを使用）...")
             
-            # ユーザー名入力
-            username_field = page.locator('input[name="username"]')
+            # ユーザー名入力 (email)
+            username_field = page.locator('input[name="email"]')
             for char in self.username:
                 username_field.type(char, delay=random.randint(100, 300))
             
             time.sleep(random.uniform(0.5, 1.5))
             
-            # パスワード入力
-            password_field = page.locator('input[name="password"]')
+            # パスワード入力 (pass)
+            password_field = page.locator('input[name="pass"]')
             for char in self.password:
                 password_field.type(char, delay=random.randint(100, 300))
 
             self._take_screenshot(page, "step1_login_input_ready")
             
-            # 3. ログインボタンクリックと遷移待機
+            # 3. ログインボタン（特定のクラスを持つspan）クリックと遷移待機
             time.sleep(random.uniform(1, 2))
-            page.click('button[type="submit"]')
+            login_button_selector = 'span.x1lliihq.x193iq5w.x6ikm8r.x10wlt62.xlyipyv.xuxw1ft'
+            page.click(login_button_selector)
             
             # ログイン後のホーム画面や特定の要素が出るまで待機
             print("ログイン完了を待機中...")
