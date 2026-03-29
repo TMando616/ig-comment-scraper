@@ -77,10 +77,21 @@ class InstagramScraper:
 
             self._take_screenshot(page, "step1_login_input_ready")
             
-            # 3. ログインボタン（特定のクラスを持つspan）クリックと遷移待機
+            # 3. ログインボタン（div[role="button"] かつテキストで特定）クリックと遷移待機
             time.sleep(random.uniform(1, 2))
-            login_button_selector = 'span.x1lliihq.x193iq5w.x6ikm8r.x10wlt62.xlyipyv.xuxw1ft'
-            page.click(login_button_selector)
+            
+            # ログインボタンを特定 (日本語・英語両対応)
+            login_button = page.locator('div[role="button"]').filter(has_text=re.compile(r"^(ログイン|Log in)$"))
+            
+            try:
+                # ボタンが表示されるまで待機してからクリック
+                login_button.wait_for(state='visible', timeout=5000)
+                print("ログインボタンをクリックします。")
+                login_button.click()
+            except Exception:
+                # フィルタリングで絞り込めない場合のフォールバック（最初のボタンを試す等）
+                print("特定のログインボタンが見つかりません。ボタン要素を直接試行します。")
+                page.click('div[role="button"]')
             
             # ログイン後のホーム画面や特定の要素が出るまで待機
             print("ログイン完了を待機中...")
