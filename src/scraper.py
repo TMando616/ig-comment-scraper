@@ -95,7 +95,7 @@ class InstagramScraper:
             
             # ログイン後のホーム画面や特定の要素が出るまで待機
             print("ログイン完了を待機中...")
-            page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=20000)
+            page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=60000)
             
             # 4. 邪魔なポップアップの処理（「情報を保存」「通知をオン」など）
             # 「後で」ボタンをいくつか試行
