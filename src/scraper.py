@@ -29,94 +29,98 @@ class InstagramScraper:
 
     def login(self, playwright) -> bool:
         """
-        Instagramにログインする。より人間らしい挙動（タイピング遅延、待機強化）で実装。
+        Instagramにログインする。state.jsonがあればそれを読み込み、ログイン済みか確認する。
         """
         try:
+            # ブラウザの起動
             self.browser = playwright.chromium.launch(headless=True)
             
+            # 1. state.jsonが存在するかチェックしてコンテキストを作成
             if os.path.exists(self.state_file):
-                print("既存のセッションを使用してログインを試みます...")
+                print(f"セッションファイル '{self.state_file}' を読み込みます...")
                 self.context = self.browser.new_context(storage_state=self.state_file)
             else:
-                print("新規ログインを開始します...")
+                print(f"警告: セッションファイル '{self.state_file}' が見つかりません。新規コンテキストを作成します。")
                 self.context = self.browser.new_context()
 
             # トレースの開始
             self.context.tracing.start(screenshots=True, snapshots=True, sources=True)
 
             page = self.context.new_page()
+            print("ログイン状態を確認するために Instagram トップページにアクセス中...")
             page.goto("https://www.instagram.com/")
             
-            # 1. 入力欄の表示を確実に待機
+            # 2. ログイン済みかどうかの判定（ホームアイコンやプロフィールアイコンの存在）
             try:
-                page.wait_for_selector('input[name="email"]', state='visible', timeout=15000)
+                # ホームアイコン、検索アイコン、またはメッセージアイコンのいずれかがあればログイン済みとみなす
+                page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"], svg[aria-label="検索"], svg[aria-label="Search"]', timeout=15000)
+                print("ログイン済みであることが確認できました。ログイン処理をスキップします。")
+                self._take_screenshot(page, "login_skipped_already_logged_in")
+                return True
             except Exception:
-                # 既にログイン済みの場合は入力欄が出ない
-                if page.query_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]'):
-                    print("既にログイン状態です。")
-                    return True
-                print("ログイン画面の読み込みに失敗しました（または既にログイン済みです）。")
+                print("ログイン状態が確認できませんでした。ログインを試行します。")
+
+            # 3. ログイン画面の入力欄が表示されるか確認
+            try:
+                # ユーザー名入力欄が表示されるまで待機
+                page.wait_for_selector('input[name="username"], input[name="email"]', state='visible', timeout=10000)
+            except Exception:
+                print("ログイン画面の入力欄が見つかりません。アクセス制限の可能性があります。")
+                self._take_screenshot(page, "login_failed_no_input_found")
                 return False
 
             time.sleep(random.uniform(1, 2))
 
-            # 2. 人間らしいタイピング（1文字ずつ遅延）
-            print("ログイン情報を入力中（新しいセレクタを使用）...")
+            # 4. ログイン情報の入力（state.jsonが無効な場合のフォールバック）
+            print(f"ユーザーID: {self.username} でログインを試みます...")
             
-            # ユーザー名入力 (email)
-            username_field = page.locator('input[name="email"]')
+            # ユーザー名入力 (username または email)
+            username_field = page.locator('input[name="username"], input[name="email"]').first
             for char in self.username:
                 username_field.type(char, delay=random.randint(100, 300))
             
             time.sleep(random.uniform(0.5, 1.5))
             
-            # パスワード入力 (pass)
-            password_field = page.locator('input[name="pass"]')
+            # パスワード入力 (password または pass)
+            password_field = page.locator('input[name="password"], input[name="pass"]').first
             for char in self.password:
                 password_field.type(char, delay=random.randint(100, 300))
 
-            self._take_screenshot(page, "step1_login_input_ready")
+            self._take_screenshot(page, "login_input_completed")
             
-            # 3. ログインボタン（div[role="button"] かつテキストで特定）クリックと遷移待機
+            # 5. ログインボタンクリック
             time.sleep(random.uniform(1, 2))
+            login_button = page.locator('button[type="submit"], div[role="button"]').filter(has_text=re.compile(r"^(ログイン|Log in)$")).first
             
-            # ログインボタンを特定 (日本語・英語両対応)
-            login_button = page.locator('div[role="button"]').filter(has_text=re.compile(r"^(ログイン|Log in)$"))
+            print("ログインボタンをクリックします。")
+            login_button.click()
             
+            # 6. ログイン完了の待機（待機時間を長めに設定）
+            print("ログイン遷移を待機中（最大60秒）...")
             try:
-                # ボタンが表示されるまで待機してからクリック
-                login_button.wait_for(state='visible', timeout=5000)
-                print("ログインボタンをクリックします。")
-                login_button.click()
-            except Exception:
-                # フィルタリングで絞り込めない場合のフォールバック（最初のボタンを試す等）
-                print("特定のログインボタンが見つかりません。ボタン要素を直接試行します。")
-                page.click('div[role="button"]')
-            
-            # ログイン後のホーム画面や特定の要素が出るまで待機
-            print("ログイン完了を待機中...")
-            page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=60000)
-            
-            # 4. 邪魔なポップアップの処理（「情報を保存」「通知をオン」など）
-            # 「後で」ボタンをいくつか試行
-            popups = [
-                "text='後で'", "text='Not Now'", 
-                "button:has-text('後で')", "button:has-text('Not Now')"
-            ]
-            for selector in popups:
-                try:
-                    # 短いタイムアウトで「後で」ボタンがあればクリック
-                    if page.locator(selector).is_visible(timeout=3000):
-                        print(f"ポップアップを閉じます: {selector}")
+                page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=60000)
+                
+                # ログイン成功後に邪魔なポップアップがあれば閉じる（「情報を保存」など）
+                time.sleep(3)
+                popups = ["text='後で'", "text='Not Now'", "button:has-text('後で')", "button:has-text('Not Now')"]
+                for selector in popups:
+                    if page.locator(selector).is_visible():
                         page.click(selector)
                         time.sleep(1)
-                except Exception:
-                    continue
 
-            self.context.storage_state(path=self.state_file)
-            print("ログインに成功し、セッション情報を保存しました。")
-            self._take_screenshot(page, "step2_after_login_success")
-            return True
+                # 新しいセッションを保存
+                self.context.storage_state(path=self.state_file)
+                print(f"ログインに成功し、新しいセッション情報を '{self.state_file}' に保存しました。")
+                self._take_screenshot(page, "login_success_and_state_saved")
+                return True
+            except Exception:
+                print("ログイン後の画面遷移を確認できませんでした。")
+                self._take_screenshot(page, "login_timeout_error")
+                return False
+
+        except Exception as e:
+            print(f"ログイン処理中に重大なエラーが発生しました: {e}")
+            return False
 
         except Exception as e:
             print(f"ログイン処理中にエラーが発生しました: {e}")
