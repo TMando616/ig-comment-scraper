@@ -2,6 +2,7 @@ import os
 import time
 import re
 import random
+import json
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 from typing import Optional, Tuple
 
@@ -38,7 +39,30 @@ class InstagramScraper:
             # 1. state.jsonが存在するかチェックしてコンテキストを作成
             if os.path.exists(self.state_file):
                 print(f"セッションファイル '{self.state_file}' を読み込みます...")
-                self.context = self.browser.new_context(storage_state=self.state_file)
+                try:
+                    # state.json を一度読み込んで内容を補正する
+                    with open(self.state_file, 'r', encoding='utf-8') as f:
+                        state = json.load(f)
+                    
+                    # cookies 内の sameSite 属性をチェック・補正
+                    if 'cookies' in state:
+                        for cookie in state['cookies']:
+                            ss = cookie.get('sameSite')
+                            # Playwright は Strict, Lax, None のいずれかしか受け付けない
+                            if ss not in ["Strict", "Lax", "None"]:
+                                # 無効な値、空文字、または大文字小文字が異なる場合は修正
+                                if not ss or ss.lower() in ["unspecified", "no_restriction", ""]:
+                                    cookie['sameSite'] = "Lax" # デフォルトをLaxに設定
+                                elif ss.capitalize() in ["Strict", "Lax", "None"]:
+                                    cookie['sameSite'] = ss.capitalize()
+                                else:
+                                    cookie['sameSite'] = "None"
+                    
+                    self.context = self.browser.new_context(storage_state=state)
+                except Exception as e:
+                    print(f"セッションファイルの読み込み・補正中にエラーが発生しました: {e}")
+                    print("新規コンテキストで続行します。")
+                    self.context = self.browser.new_context()
             else:
                 print(f"警告: セッションファイル '{self.state_file}' が見つかりません。新規コンテキストを作成します。")
                 self.context = self.browser.new_context()
