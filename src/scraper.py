@@ -272,6 +272,7 @@ class InstagramScraper:
     def get_commenting_users(self, post_url: str) -> Tuple[list[str], str]:
         """
         指定された投稿URLから、コメントしているユーザーのIDリストを取得する。
+        「コメント...件をすべて見る」ボタンがあればクリックして展開を試みる。
         """
         if not self.context:
             return [], "エラー: 未ログイン"
@@ -287,34 +288,37 @@ class InstagramScraper:
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
             self._take_screenshot(page, f"step4_post_{post_id}")
 
-            # 投稿者のユーザーIDを取得（通常、最初のリンクやヘッダーにある）
+            # 1. コメント展開ボタン（特定のクラスを持つボタン）を探してクリック
+            comment_button = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
+            if comment_button.count() > 0:
+                print(f"コメント展開ボタンが見つかりました: {comment_button.first.inner_text()}")
+                try:
+                    # ボタンをクリックしてコメントをロード
+                    comment_button.first.click()
+                    print("コメントを展開しました。読み込みを待機します...")
+                    time.sleep(random.uniform(2, 4))
+                    self._take_screenshot(page, f"step5_post_expanded_{post_id}")
+                except Exception as e:
+                    print(f"コメント展開ボタンのクリックに失敗しました: {e}")
+
+            # 2. 投稿者のユーザーIDを取得
             author_elem = page.query_selector('header a[role="link"], article header a')
             author_id = ""
             if author_elem:
                 author_id = author_elem.inner_text().strip()
                 print(f"投稿者ID: {author_id}")
 
-            # コメント投稿者の要素を探す
-            # Instagramの構造は頻繁に変わるが、通常 article 内の a[role="link"] または a 
-            # 投稿本文（最初の要素）とコメントを区別するため、特定のコンテナ内を探索
-            comment_selectors = [
-                'ul.x78zum5 li a[role="link"]', # コメント欄のリスト内
-                'article ul li span a',
-                'div[role="button"] a'
-            ]
-            
+            # 3. コメント投稿者の要素を収集
             commenters = set()
             
-            # ページ内のリンクを全走査して、コメント欄と思われる場所からIDを抽出
-            # ここでは単純化のため、article内の全てのユーザー名リンクを取得し、後で加工
+            # ページ内のユーザー名リンクを全走査
             user_links = page.query_selector_all('article a[role="link"]')
             for link in user_links:
                 uid = link.inner_text().strip()
-                # 空でない、投稿者でない、かつ特定のキーワード（"プロフィール"等）でないものを収集
+                # 空でない、投稿者でない、かつ特定のキーワードでないものを収集
                 if uid and uid != author_id and len(uid) > 1:
-                    # 改行が含まれる場合は最初の行（ユーザーID）のみ取得
                     uid = uid.split('\n')[0]
-                    # 有効なユーザーIDっぽいか簡易チェック（英数字、アンダースコア、ドット）
+                    # 有効なユーザーIDっぽいか簡易チェック
                     if re.match(r'^[a-zA-Z0-9._]+$', uid):
                         commenters.add(uid)
 
