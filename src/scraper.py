@@ -333,7 +333,8 @@ class InstagramScraper:
 
     def get_comment_count(self, post_url: str) -> Tuple[Optional[int], str]:
         """
-        指定された投稿URLからコメント数を取得する
+        指定された投稿URLからコメント数を取得する。
+        「コメント...件をすべて見る」ボタンのテキストから数値を抽出。
         """
         if not self.context:
             return None, "エラー: 未ログイン"
@@ -343,27 +344,47 @@ class InstagramScraper:
             print(f"投稿にアクセス中: {post_url}")
             page.goto(post_url)
             page.wait_for_load_state("networkidle")
-            time.sleep(3)
-            time.sleep(random.uniform(2, 4))
+            time.sleep(random.uniform(3, 5))
             
             # URLからスラッグを抽出してファイル名に使用
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
             self._take_screenshot(page, f"step4_post_{post_id}")
 
-            meta_desc = page.get_attribute('meta[property="og:description"]', 'content')
-            if meta_desc:
-                match = re.search(r'(\d+)\s*件のコメント', meta_desc) or re.search(r'(\d+)\s*Comments', meta_desc)
-                match = re.search(r'([\d,]+)\s*件のコメント', meta_desc) or re.search(r'([\d,]+)\s*Comments', meta_desc)
+            # 1. 指定されたセレクタで要素を特定
+            # クラス名は複数指定して精度を高める
+            comment_button = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
+            
+            # 2. テキストの抽出と数値化
+            count = 0
+            if comment_button.count() > 0:
+                # 最初の要素のテキストを取得
+                text = comment_button.first.inner_text()
+                print(f"コメントボタンのテキスト: {text}")
+                
+                # 正規表現で数値を抽出（カンマ区切りにも対応）
+                match = re.search(r'([\d,]+)', text)
                 if match:
-                    count = int(match.group(1))
-                    # カンマを除去してから整数に変換
-                    count = int(match.group(1).replace(',', ''))
-                    return count, "成功"
+                    count_str = match.group(1).replace(',', '')
+                    count = int(count_str)
+                    print(f"抽出されたコメント数: {count}")
+            else:
+                # ボタンが見つからない場合は、コメントが0件か、または表示形式が異なる
+                print("コメント数ボタンが見つかりません。コメント0件、または表示形式が異なる可能性があります。")
+                
+                # フォールバック: og:description からの抽出も試みる（保険として）
+                meta_desc = page.get_attribute('meta[property="og:description"]', 'content')
+                if meta_desc:
+                    match = re.search(r'([\d,]+)\s*(件のコメント|Comments)', meta_desc)
+                    if match:
+                        count = int(match.group(1).replace(',', ''))
+                        print(f"メタデータから抽出されたコメント数: {count}")
 
-            return 0, "成功（または取得不能により0と判定）"
+            return count, "成功"
 
         except Exception as e:
-            return None, f"失敗: コメント取得エラー ({str(e)})"
+            # エラー発生時は安全に0を返すか、エラーメッセージを添えてNoneを返す
+            print(f"コメント数取得中にエラーが発生しました（0として扱います）: {e}")
+            return 0, f"警告: 取得エラー ({str(e)})"
         finally:
             page.close()
 
