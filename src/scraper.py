@@ -288,18 +288,22 @@ class InstagramScraper:
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
             self._take_screenshot(page, f"step4_post_{post_id}")
 
-            # 1. コメント展開ボタン（特定のクラスを持つボタン）を探してクリック
-            comment_button = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
-            if comment_button.count() > 0:
-                print(f"コメント展開ボタンが見つかりました: {comment_button.first.inner_text()}")
+            # 1. コメント展開ボタンを探してクリック（2番目の要素を指定）
+            comment_buttons = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
+            # 「いいね」ボタンと重複するため、2番目（index: 1）をターゲットにする
+            if comment_buttons.count() > 1:
+                target_button = comment_buttons.nth(1)
+                print(f"コメント展開ボタンが見つかりました: {target_button.inner_text()}")
                 try:
-                    # ボタンをクリックしてコメントをロード
-                    comment_button.first.click()
+                    target_button.click()
                     print("コメントを展開しました。読み込みを待機します...")
                     time.sleep(random.uniform(2, 4))
                     self._take_screenshot(page, f"step5_post_expanded_{post_id}")
                 except Exception as e:
                     print(f"コメント展開ボタンのクリックに失敗しました: {e}")
+            elif comment_buttons.count() == 1:
+                print("コメントボタンが1つのみ見つかりました。最初の要素を試行します。")
+                comment_buttons.first.click()
 
             # 2. 投稿者のユーザーIDを取得
             author_elem = page.query_selector('header a[role="link"], article header a')
@@ -354,39 +358,46 @@ class InstagramScraper:
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
             self._take_screenshot(page, f"step4_post_{post_id}")
 
-            # 1. 指定されたセレクタで要素を特定
-            # クラス名は複数指定して精度を高める
-            comment_button = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
+            # 1. 指定されたセレクタで2番目の要素を特定
+            comment_buttons = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
             
             # 2. テキストの抽出と数値化
             count = 0
-            if comment_button.count() > 0:
-                # 最初の要素のテキストを取得
-                text = comment_button.first.inner_text()
-                print(f"コメントボタンのテキスト: {text}")
+            # 「いいね」ボタンと重複するため、2番目（index: 1）をターゲットにする
+            if comment_buttons.count() > 1:
+                target_button = comment_buttons.nth(1)
+                text = target_button.inner_text()
+                print(f"コメントボタン（2番目）のテキスト: {text}")
                 
-                # 正規表現で数値を抽出（カンマ区切りにも対応）
+                # 正規表現で数値を抽出
                 match = re.search(r'([\d,]+)', text)
                 if match:
                     count_str = match.group(1).replace(',', '')
                     count = int(count_str)
                     print(f"抽出されたコメント数: {count}")
             else:
-                # ボタンが見つからない場合は、コメントが0件か、または表示形式が異なる
-                print("コメント数ボタンが見つかりません。コメント0件、または表示形式が異なる可能性があります。")
+                print(f"十分な数のコメントボタンが見つかりません（取得数: {comment_buttons.count()}）。")
                 
-                # フォールバック: og:description からの抽出も試みる（保険として）
-                meta_desc = page.get_attribute('meta[property="og:description"]', 'content')
-                if meta_desc:
-                    match = re.search(r'([\d,]+)\s*(件のコメント|Comments)', meta_desc)
+                # フォールバック: ボタンが1つしかない場合、それが目的の要素である可能性を試す
+                if comment_buttons.count() == 1:
+                    text = comment_buttons.first.inner_text()
+                    match = re.search(r'([\d,]+)', text)
                     if match:
                         count = int(match.group(1).replace(',', ''))
-                        print(f"メタデータから抽出されたコメント数: {count}")
+                        print(f"最初のボタンから抽出されたコメント数: {count}")
+
+                # 最終的な保険としてメタデータからも抽出
+                if count == 0:
+                    meta_desc = page.get_attribute('meta[property="og:description"]', 'content')
+                    if meta_desc:
+                        match = re.search(r'([\d,]+)\s*(件のコメント|Comments)', meta_desc)
+                        if match:
+                            count = int(match.group(1).replace(',', ''))
+                            print(f"メタデータから抽出されたコメント数: {count}")
 
             return count, "成功"
 
         except Exception as e:
-            # エラー発生時は安全に0を返すか、エラーメッセージを添えてNoneを返す
             print(f"コメント数取得中にエラーが発生しました（0として扱います）: {e}")
             return 0, f"警告: 取得エラー ({str(e)})"
         finally:
