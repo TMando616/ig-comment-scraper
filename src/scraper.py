@@ -272,7 +272,7 @@ class InstagramScraper:
     def get_commenting_users(self, post_url: str) -> Tuple[list[str], str]:
         """
         指定された投稿URLから、コメントしているユーザーのIDリストを取得する。
-        「コメント...件をすべて見る」ボタンがあればクリックして展開を試みる。
+        特定の div 領域をスクロールしてコメントを読み込む。
         """
         if not self.context:
             return [], "エラー: 未ログイン"
@@ -288,31 +288,36 @@ class InstagramScraper:
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
             self._take_screenshot(page, f"step4_post_{post_id}")
 
-            # 1. コメント展開ボタンを探してクリック（2番目の要素を指定）
-            comment_buttons = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
-            # 「いいね」ボタンと重複するため、2番目（index: 1）をターゲットにする
-            if comment_buttons.count() > 1:
-                target_button = comment_buttons.nth(1)
-                print(f"コメント展開ボタンが見つかりました: {target_button.inner_text()}")
-                try:
-                    target_button.click()
-                    print("コメントを展開しました。読み込みを待機します...")
-                    time.sleep(random.uniform(2, 4))
-                    self._take_screenshot(page, f"step5_post_expanded_{post_id}")
-                except Exception as e:
-                    print(f"コメント展開ボタンのクリックに失敗しました: {e}")
-            elif comment_buttons.count() == 1:
-                print("コメントボタンが1つのみ見つかりました。最初の要素を試行します。")
-                comment_buttons.first.click()
+            # 1. スクロール領域（div要素）を特定
+            # セレクタ: div.x5yr21d.xw2csxc.x1odjw0f.x1n2onr6
+            scroll_selector = 'div.x5yr21d.xw2csxc.x1odjw0f.x1n2onr6'
+            scrollable_area = page.locator(scroll_selector)
 
-            # 2. 投稿者のユーザーIDを取得
+            if scrollable_area.count() > 0:
+                print("コメントスクロール領域を確認しました。スクロールを開始します...")
+                # 2. 要素内スクロールを 5 回実行
+                for i in range(5):
+                    try:
+                        # JavaScriptを実行して要素の最下部までスクロール
+                        scrollable_area.evaluate("el => el.scrollTop = el.scrollHeight")
+                        print(f"スクロール実行中 ({i+1}/5)...")
+                        # 新しいコンテンツの読み込み待機
+                        page.wait_for_timeout(random.randint(1500, 2500))
+                    except Exception as scroll_error:
+                        print(f"スクロール中にエラーが発生しました: {scroll_error}")
+                        break
+                self._take_screenshot(page, f"step5_post_scrolled_{post_id}")
+            else:
+                print("指定されたスクロール領域が見つかりません。デフォルトの状態で抽出を試みます。")
+
+            # 3. 投稿者のユーザーIDを取得
             author_elem = page.query_selector('header a[role="link"], article header a')
             author_id = ""
             if author_elem:
                 author_id = author_elem.inner_text().strip()
                 print(f"投稿者ID: {author_id}")
 
-            # 3. コメント投稿者の要素を収集
+            # 4. コメント投稿者の要素を収集
             commenters = set()
             
             # ページ内のユーザー名リンクを全走査
