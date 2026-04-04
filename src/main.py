@@ -64,7 +64,7 @@ def main():
                 all_rows = []
                 # 2. 各投稿URLにアクセスしてコメントユーザーを抽出
                 for post_url in post_urls:
-                    commenter_ids, comment_status = scraper.get_commenting_users(post_url)
+                    commenter_ids, comment_status = scraper.get_commenting_users(post_url, user_id)
                     
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     if commenter_ids:

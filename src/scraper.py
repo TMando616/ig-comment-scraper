@@ -269,7 +269,7 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def get_commenting_users(self, post_url: str) -> Tuple[list[str], str]:
+    def get_commenting_users(self, post_url: str, target_user_id: str = "") -> Tuple[list[str], str]:
         """
         指定された投稿URLから、コメントしているユーザーのIDリストを取得する。
         特定の div 領域をスクロールしてコメントを読み込む。
@@ -310,29 +310,32 @@ class InstagramScraper:
             else:
                 print("指定されたスクロール領域が見つかりません。デフォルトの状態で抽出を試みます。")
 
-            # 3. 投稿者のユーザーIDを取得
+            # 3. 投稿者のユーザーIDを取得（除外対象の特定）
+            # ページヘッダーから投稿者IDを試行的に取得
             author_elem = page.query_selector('header a[role="link"], article header a')
-            author_id = ""
-            if author_elem:
-                author_id = author_elem.inner_text().strip()
-                print(f"投稿者ID: {author_id}")
+            page_author_id = author_elem.inner_text().strip() if author_elem else ""
+            
+            # 除外すべきIDリスト（引数で渡されたターゲットIDと、ページから取得した投稿者ID）
+            exclude_ids = {target_user_id.lower(), page_author_id.lower()}
+            print(f"除外対象ID: {exclude_ids}")
 
             # 4. コメント投稿者の要素を収集
-            commenters = set()
+            # 指定されたクラスを持つ span タグからテキストを一括取得
+            id_selector = 'span._ap3a._aaco._aacw._aacx._aad7._aade'
+            raw_user_ids = page.locator(id_selector).all_inner_texts()
             
-            # ページ内のユーザー名リンクを全走査
-            user_links = page.query_selector_all('article a[role="link"]')
-            for link in user_links:
-                uid = link.inner_text().strip()
-                # 空でない、投稿者でない、かつ特定のキーワードでないものを収集
-                if uid and uid != author_id and len(uid) > 1:
-                    uid = uid.split('\n')[0]
-                    # 有効なユーザーIDっぽいか簡易チェック
-                    if re.match(r'^[a-zA-Z0-9._]+$', uid):
-                        commenters.add(uid)
+            commenters = set()
+            for uid in raw_user_ids:
+                uid_clean = uid.strip()
+                # 空でない、除外対象でない、かつ有効なユーザーID形式であることを確認
+                if uid_clean and uid_clean.lower() not in exclude_ids and len(uid_clean) > 1:
+                    # 改行が含まれる場合は最初の行のみ取得
+                    uid_clean = uid_clean.split('\n')[0]
+                    if re.match(r'^[a-zA-Z0-9._]+$', uid_clean):
+                        commenters.add(uid_clean)
 
             result_list = list(commenters)
-            print(f"コメントユーザーを {len(result_list)} 名取得しました。")
+            print(f"一意のコメントユーザーを {len(result_list)} 名取得しました。")
             
             if not result_list:
                 return [], "成功（コメントなし、または取得不能）"
