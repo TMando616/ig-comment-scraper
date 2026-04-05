@@ -176,9 +176,9 @@ class InstagramScraper:
             print(f"投稿数取得中にエラーが発生しました: {e}")
             return 0
 
-    def get_recent_post_urls(self, user_id: str, limit: int = 10) -> Tuple[list[str], int, str]:
+    def get_recent_post_urls(self, user_id: str, max_posts: int = 10) -> Tuple[list[str], int, str]:
         """
-        指定されたユーザーIDのプロフィールから最新の投稿URLリスト（最大10件）と総投稿数を取得する
+        指定されたユーザーIDのプロフィールから最新の投稿URLリスト（最大 max_posts 件）と総投稿数を取得する
         """
         if not self.context:
             return [], 0, "エラー: 未ログイン"
@@ -216,11 +216,11 @@ class InstagramScraper:
                     full_url = f"https://www.instagram.com{href}"
                     urls.append(full_url)
                     seen_hrefs.add(href)
-                    if len(urls) >= limit:
+                    if len(urls) >= max_posts:
                         break
             
             if urls:
-                print(f"{len(urls)} 件の投稿URLを取得しました。")
+                print(f"最新の {len(urls)} 件の投稿URLを取得しました。")
                 return urls, total_posts, "成功"
             else:
                 return [], total_posts, "失敗: 投稿が見つかりません（0件の可能性）"

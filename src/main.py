@@ -49,8 +49,9 @@ def main():
             for user_id in user_ids:
                 print(f"\n--- ユーザー処理開始: {user_id} ---")
                 
-                # 1. 投稿URLを最大10件取得
-                post_urls, total_posts, profile_status = scraper.get_recent_post_urls(user_id, limit=10)
+                # 1. 投稿URLを取得
+                print(f"最新の {TARGET_POST_COUNT} 件の投稿を取得します...")
+                post_urls, total_posts, profile_status = scraper.get_recent_post_urls(user_id, max_posts=TARGET_POST_COUNT)
                 
                 if not post_urls:
                     # 投稿が見つからない、またはエラーの場合
