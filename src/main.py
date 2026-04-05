@@ -9,6 +9,14 @@ def main():
     # .env ファイルの読み込み
     load_dotenv()
 
+    # コマンドライン引数から取得投稿数を受け取る（デフォルト3）
+    target_post_count = 3
+    if len(sys.argv) > 1:
+        try:
+            target_post_count = int(sys.argv[1])
+        except ValueError:
+            print(f"警告: 引数 '{sys.argv[1]}' が数値ではありません。デフォルトの 3 を使用します。")
+
     # 環境変数の取得
     ig_username = os.getenv("INSTAGRAM_USERNAME")
     ig_password = os.getenv("INSTAGRAM_PASSWORD")
@@ -20,7 +28,7 @@ def main():
         print("エラー: .env ファイルに必要な設定が不足しています。")
         sys.exit(1)
 
-    print("=== Instagram Comment Scraper (Debug Mode) 起動 ===")
+    print(f"=== Instagram Comment Scraper 起動 (取得件数: {target_post_count}) ===")
 
     try:
         ss_manager = SpreadsheetManager(spreadsheet_key, service_account_file)
@@ -50,8 +58,8 @@ def main():
                 print(f"\n--- ユーザー処理開始: {user_id} ---")
                 
                 # 1. 投稿URLを取得
-                print(f"最新の {TARGET_POST_COUNT} 件の投稿を取得します...")
-                post_urls, total_posts, profile_status = scraper.get_recent_post_urls(user_id, max_posts=TARGET_POST_COUNT)
+                print(f"最新の {target_post_count} 件の投稿を取得します...")
+                post_urls, total_posts, profile_status = scraper.get_recent_post_urls(user_id, max_posts=target_post_count)
                 
                 if not post_urls:
                     # 投稿が見つからない、またはエラーの場合
