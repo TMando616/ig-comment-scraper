@@ -64,7 +64,7 @@ def main():
                 if not post_urls:
                     # 投稿が見つからない、またはエラーの場合
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    ss_manager.append_result(user_id, "-", "-", "-", profile_status)
+                    ss_manager.append_result(user_id, "-", "-", "-", "-", profile_status)
                     print(f"プロフィール処理結果: {profile_status}")
                     continue
 
@@ -80,10 +80,12 @@ def main():
                         for cid in commenter_ids:
                             # ユーザーIDからプロフィールURLを生成
                             user_url = f"https://www.instagram.com/{cid}/"
-                            all_rows.append([now, user_id, post_url, cid, user_url, "成功"])
+                            # 非公開アカウントかどうかを判定
+                            account_status = scraper.is_private_account(cid)
+                            all_rows.append([now, user_id, post_url, cid, user_url, account_status, "成功"])
                     else:
                         # コメントがない場合も1行記録（またはスキップの判断も可。ここでは記録する）
-                        all_rows.append([now, user_id, post_url, "-", "-", comment_status])
+                        all_rows.append([now, user_id, post_url, "-", "-", "-", comment_status])
                 
                 # 3. スプレッドシートへ一括書き込み
                 if all_rows:

@@ -411,6 +411,55 @@ class InstagramScraper:
         finally:
             page.close()
 
+    def is_private_account(self, user_id: str) -> str:
+        """
+        指定されたユーザーIDのプロフィールにアクセスし、非公開アカウント（鍵垢）かどうかを判定する。
+        """
+        if not self.context:
+            return "判定不能（未ログイン）"
+
+        page: Page = self.context.new_page()
+        profile_url = f"https://www.instagram.com/{user_id}/"
+        try:
+            # Bot検知回避のためのランダム待機（遷移前）
+            time.sleep(random.uniform(2, 5))
+            
+            print(f"アカウント状態を確認中: {profile_url}")
+            response = page.goto(profile_url)
+            
+            if response.status == 404:
+                return "判定不能（404）"
+            
+            # ページ読み込み後のランダム待機（遷移後）
+            page.wait_for_load_state("networkidle")
+            time.sleep(random.uniform(2, 5))
+            
+            # 非公開アカウントの判定
+            # 日本語: 「このアカウントは非公開です」 英語: 「This account is private」
+            # また、鍵アイコン等の要素も考慮
+            is_private = False
+            private_selectors = [
+                'text="このアカウントは非公開です"',
+                'text="This account is private"',
+                'svg[aria-label="非公開"]',
+                'svg[aria-label="Private"]'
+            ]
+            
+            for selector in private_selectors:
+                if page.locator(selector).is_visible():
+                    is_private = True
+                    break
+            
+            status = "非公開" if is_private else "公開"
+            print(f"ユーザー {user_id} の状態: {status}")
+            return status
+
+        except Exception as e:
+            print(f"アカウント状態判定中にエラーが発生しました ({user_id}): {e}")
+            return "判定エラー"
+        finally:
+            page.close()
+
     def stop_tracing(self):
         """トレースを停止して保存する"""
         if self.context:
