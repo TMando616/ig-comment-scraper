@@ -411,12 +411,35 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def is_private_account(self, user_id: str) -> str:
+    def _convert_stat_to_int(self, text: str) -> int:
         """
-        指定されたユーザーIDのプロフィールにアクセスし、非公開アカウント（鍵垢）かどうかを判定する。
+        Instagramの統計テキスト（"1.2k", "1,500"等）を数値(int)に変換する。
+        """
+        if not text:
+            return 0
+        
+        # カンマを除去
+        clean_text = text.replace(',', '').strip().lower()
+        
+        try:
+            if 'k' in clean_text:
+                return int(float(clean_text.replace('k', '')) * 1000)
+            elif 'm' in clean_text:
+                return int(float(clean_text.replace('m', '')) * 1000000)
+            else:
+                # 数字以外の文字（「件」など）を除去して数値化
+                num_str = re.sub(r'[^\d.]', '', clean_text)
+                return int(float(num_str)) if num_str else 0
+        except (ValueError, TypeError):
+            return 0
+
+    def get_profile_info(self, user_id: str) -> Tuple[str, int, int]:
+        """
+        指定されたユーザーIDのプロフィールにアクセスし、
+        非公開判定、フォロワー数、フォロー数を一括で取得する。
         """
         if not self.context:
-            return "判定不能（未ログイン）"
+            return "判定不能（未ログイン）", 0, 0
 
         page: Page = self.context.new_page()
         profile_url = f"https://www.instagram.com/{user_id}/"
@@ -424,19 +447,17 @@ class InstagramScraper:
             # Bot検知回避のためのランダム待機（遷移前）
             time.sleep(random.uniform(2, 5))
             
-            print(f"アカウント状態を確認中: {profile_url}")
+            print(f"プロフィール情報を確認中: {profile_url}")
             response = page.goto(profile_url)
             
             if response.status == 404:
-                return "判定不能（404）"
+                return "判定不能（404）", 0, 0
             
             # ページ読み込み後のランダム待機（遷移後）
             page.wait_for_load_state("networkidle")
             time.sleep(random.uniform(2, 5))
             
-            # 非公開アカウントの判定
-            # 日本語: 「このアカウントは非公開です」 英語: 「This account is private」
-            # また、鍵アイコン等の要素も考慮
+            # 1. 非公開アカウントの判定
             is_private = False
             private_selectors = [
                 'text="このアカウントは非公開です"',
@@ -444,21 +465,61 @@ class InstagramScraper:
                 'svg[aria-label="非公開"]',
                 'svg[aria-label="Private"]'
             ]
-            
             for selector in private_selectors:
                 if page.locator(selector).is_visible():
                     is_private = True
                     break
             
-            status = "非公開" if is_private else "公開"
-            print(f"ユーザー {user_id} の状態: {status}")
-            return status
+            account_status = "非公開" if is_private else "公開"
+
+            # 2. フォロワー数・フォロー数の取得
+            followers_count = 0
+            following_count = 0
+
+            # フォロワー数の取得
+            # span要素またはa要素自体からテキストを取得する複数のパターンに対応
+            followers_selectors = [
+                'a[href*="/followers/"] span',
+                'a[href*="/followers/"]',
+                'li:has-text("フォロワー") span',
+                'li:has-text("followers") span'
+            ]
+            for sel in followers_selectors:
+                elem = page.locator(sel).first
+                if elem.is_visible():
+                    followers_text = elem.inner_text()
+                    followers_count = self._convert_stat_to_int(followers_text)
+                    if followers_count > 0: break
+
+            # フォロー数の取得
+            following_selectors = [
+                'a[href*="/following/"] span',
+                'a[href*="/following/"]',
+                'li:has-text("フォロー中") span',
+                'li:has-text("following") span'
+            ]
+            for sel in following_selectors:
+                elem = page.locator(sel).first
+                if elem.is_visible():
+                    following_text = elem.inner_text()
+                    following_count = self._convert_stat_to_int(following_text)
+                    if following_count > 0: break
+
+            print(f"ユーザー {user_id}: {account_status}, フォロワー: {followers_count}, フォロー: {following_count}")
+            return account_status, followers_count, following_count
 
         except Exception as e:
-            print(f"アカウント状態判定中にエラーが発生しました ({user_id}): {e}")
-            return "判定エラー"
+            print(f"プロフィール情報取得中にエラーが発生しました ({user_id}): {e}")
+            return "判定エラー", 0, 0
         finally:
             page.close()
+
+    def is_private_account(self, user_id: str) -> str:
+        """
+        互換性のために残すメソッド。内部で get_profile_info を呼び出す。
+        """
+        status, _, _ = self.get_profile_info(user_id)
+        return status
 
     def stop_tracing(self):
         """トレースを停止して保存する"""
