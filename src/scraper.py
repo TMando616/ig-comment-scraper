@@ -433,13 +433,13 @@ class InstagramScraper:
         except (ValueError, TypeError):
             return 0
 
-    def get_profile_info(self, user_id: str) -> Tuple[str, int, int]:
+    def get_profile_info(self, user_id: str) -> Tuple[str, int, int, str]:
         """
         指定されたユーザーIDのプロフィールにアクセスし、
-        非公開判定、フォロワー数、フォロー数を一括で取得する。
+        非公開判定、フォロワー数、フォロー数、プロフィール文を一括で取得する。
         """
         if not self.context:
-            return "判定不能（未ログイン）", 0, 0
+            return "判定不能（未ログイン）", 0, 0, ""
 
         page: Page = self.context.new_page()
         profile_url = f"https://www.instagram.com/{user_id}/"
@@ -451,7 +451,7 @@ class InstagramScraper:
             response = page.goto(profile_url)
             
             if response.status == 404:
-                return "判定不能（404）", 0, 0
+                return "判定不能（404）", 0, 0, ""
             
             # ページ読み込み後のランダム待機（遷移後）
             page.wait_for_load_state("networkidle")
@@ -477,7 +477,6 @@ class InstagramScraper:
             following_count = 0
 
             # フォロワー数の取得
-            # span要素またはa要素自体からテキストを取得する複数のパターンに対応
             followers_selectors = [
                 'a[href*="/followers/"] span',
                 'a[href*="/followers/"]',
@@ -505,12 +504,29 @@ class InstagramScraper:
                     following_count = self._convert_stat_to_int(following_text)
                     if following_count > 0: break
 
-            print(f"ユーザー {user_id}: {account_status}, フォロワー: {followers_count}, フォロー: {following_count}")
-            return account_status, followers_count, following_count
+            # 3. プロフィール文（Bio）の取得
+            bio_text = ""
+            # プロフィール文が含まれる一般的なセレクタ
+            bio_selectors = [
+                'header section div:has-text("プロフィール") + div span', # 日本語設定
+                'header section div.x78zum5.x1q0g3np.xieb34t span[dir="auto"]',
+                'main header section > div:nth-child(3) span'
+            ]
+            
+            for sel in bio_selectors:
+                bio_elem = page.locator(sel).first
+                if bio_elem.is_visible():
+                    raw_bio = bio_elem.inner_text()
+                    # 改行を " / " に置換してスプレッドシートで見やすくする
+                    bio_text = raw_bio.replace("\n", " / ").strip()
+                    if bio_text: break
+
+            print(f"ユーザー {user_id}: {account_status}, フォロワー: {followers_count}, フォロー: {following_count}, Bio: {bio_text[:30]}...")
+            return account_status, followers_count, following_count, bio_text
 
         except Exception as e:
             print(f"プロフィール情報取得中にエラーが発生しました ({user_id}): {e}")
-            return "判定エラー", 0, 0
+            return "判定エラー", 0, 0, ""
         finally:
             page.close()
 
@@ -518,7 +534,7 @@ class InstagramScraper:
         """
         互換性のために残すメソッド。内部で get_profile_info を呼び出す。
         """
-        status, _, _ = self.get_profile_info(user_id)
+        status, _, _, _ = self.get_profile_info(user_id)
         return status
 
     def stop_tracing(self):

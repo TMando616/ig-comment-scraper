@@ -42,7 +42,7 @@ class SpreadsheetManager:
     def append_results(self, rows: List[List[Any]]) -> bool:
         """
         「出力結果」シートに複数の結果を一括で追記する
-        rowのフォーマット: [取得日時, ターゲットID, 投稿URL, コメントユーザーID, ユーザーURL, アカウント状態, フォロワー数, フォロー数, ステータス]
+        rowのフォーマット: [取得日時, ターゲットID, 投稿URL, コメントユーザーID, ユーザーURL, アカウント状態, フォロワー数, フォロー数, プロフィール文, ステータス]
         """
         try:
             if not rows:
@@ -53,14 +53,14 @@ class SpreadsheetManager:
             print(f"複数行の結果追記中にエラーが発生しました: {e}")
             return False
 
-    def append_result(self, user_id: str, post_url: str, commenter_id: Any, commenter_url: str, account_status: str, followers: int, following: int, status: str) -> bool:
+    def append_result(self, user_id: str, post_url: str, commenter_id: Any, commenter_url: str, account_status: str, followers: int, following: int, bio: str, status: str) -> bool:
         """
         「出力結果」シートに1行の結果を追記する
-        フォーマット: [取得日時, ターゲットユーザーID, 投稿URL, コメントユーザーID, ユーザーURL, アカウント状態, フォロワー数, フォロー数, ステータス]
+        フォーマット: [取得日時, ターゲットユーザーID, 投稿URL, コメントユーザーID, ユーザーURL, アカウント状態, フォロワー数, フォロー数, プロフィール文, ステータス]
         """
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            row = [now, user_id, post_url, commenter_id, commenter_url, account_status, followers, following, status]
+            row = [now, user_id, post_url, commenter_id, commenter_url, account_status, followers, following, bio, status]
             self.result_sheet.append_row(row)
             return True
         except Exception as e:
