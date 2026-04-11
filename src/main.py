@@ -64,7 +64,7 @@ def main():
                 if not post_urls:
                     # 投稿が見つからない、またはエラーの場合
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    ss_manager.append_result(user_id, "-", "-", "-", "-", 0, 0, "", profile_status)
+                    ss_manager.append_result(user_id, "-", "-", "-", "-", "-", "-", 0, 0, "", profile_status)
                     print(f"プロフィール処理結果: {profile_status}")
                     continue
 
@@ -73,19 +73,21 @@ def main():
                 all_rows = []
                 # 2. 各投稿URLにアクセスしてコメントユーザーを抽出
                 for post_url in post_urls:
-                    commenter_ids, comment_status = scraper.get_commenting_users(post_url, user_id)
+                    comment_data, comment_status = scraper.get_commenting_users(post_url, user_id)
                     
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    if commenter_ids:
-                        for cid in commenter_ids:
+                    if comment_data:
+                        for entry in comment_data:
+                            cid = entry["user_id"]
+                            c_text = entry["comment_text"]
                             # ユーザーIDからプロフィールURLを生成
                             user_url = f"https://www.instagram.com/{cid}/"
                             # プロフィール情報を一括取得（非公開判定、フォロワー数、フォロー数、Bio）
                             account_status, followers, following, bio = scraper.get_profile_info(cid)
-                            all_rows.append([now, user_id, post_url, cid, user_url, account_status, followers, following, bio, "成功"])
+                            all_rows.append([now, user_id, post_url, cid, c_text, user_url, account_status, followers, following, bio, "成功"])
                     else:
                         # コメントがない場合も1行記録（またはスキップの判断も可。ここでは記録する）
-                        all_rows.append([now, user_id, post_url, "-", "-", "-", 0, 0, "", comment_status])
+                        all_rows.append([now, user_id, post_url, "-", "-", "-", "-", 0, 0, "", comment_status])
                 
                 # 3. スプレッドシートへ一括書き込み
                 if all_rows:

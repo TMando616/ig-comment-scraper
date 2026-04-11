@@ -269,10 +269,9 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def get_commenting_users(self, post_url: str, target_user_id: str = "") -> Tuple[list[str], str]:
+    def get_commenting_users(self, post_url: str, target_user_id: str = "") -> Tuple[list[dict], str]:
         """
-        指定された投稿URLから、コメントしているユーザーのIDリストを取得する。
-        特定の div 領域をスクロールしてコメントを読み込む。
+        指定された投稿URLから、コメントしているユーザーのIDとコメント内容のリストを取得する。
         """
         if not self.context:
             return [], "エラー: 未ログイン"
@@ -289,57 +288,70 @@ class InstagramScraper:
             self._take_screenshot(page, f"step4_post_{post_id}")
 
             # 1. スクロール領域（div要素）を特定
-            # セレクタ: div.x5yr21d.xw2csxc.x1odjw0f.x1n2onr6
             scroll_selector = 'div.x5yr21d.xw2csxc.x1odjw0f.x1n2onr6'
             scrollable_area = page.locator(scroll_selector)
 
             if scrollable_area.count() > 0:
                 print("コメントスクロール領域を確認しました。スクロールを開始します...")
-                # 2. 要素内スクロールを 5 回実行
                 for i in range(5):
                     try:
-                        # JavaScriptを実行して要素の最下部までスクロール
                         scrollable_area.evaluate("el => el.scrollTop = el.scrollHeight")
-                        print(f"スクロール実行中 ({i+1}/5)...")
-                        # 新しいコンテンツの読み込み待機
                         page.wait_for_timeout(random.randint(1500, 2500))
                     except Exception as scroll_error:
                         print(f"スクロール中にエラーが発生しました: {scroll_error}")
                         break
                 self._take_screenshot(page, f"step5_post_scrolled_{post_id}")
-            else:
-                print("指定されたスクロール領域が見つかりません。デフォルトの状態で抽出を試みます。")
 
-            # 3. 投稿者のユーザーIDを取得（除外対象の特定）
-            # ページヘッダーから投稿者IDを試行的に取得
+            # 2. 投稿者のユーザーIDを取得（除外対象の特定）
             author_elem = page.query_selector('header a[role="link"], article header a')
             page_author_id = author_elem.inner_text().strip() if author_elem else ""
-            
-            # 除外すべきIDリスト（引数で渡されたターゲットIDと、ページから取得した投稿者ID）
             exclude_ids = {target_user_id.lower(), page_author_id.lower()}
-            print(f"除外対象ID: {exclude_ids}")
 
-            # 4. コメント投稿者の要素を収集
-            # 指定されたクラスを持つ span タグからテキストを一括取得
-            id_selector = 'span._ap3a._aaco._aacw._aacx._aad7._aade'
-            raw_user_ids = page.locator(id_selector).all_inner_texts()
+            # 3. 各コメントのコンテナ要素をループ処理
+            comment_containers = page.locator('ul.x1qjc9v5 > div, ul.x1qjc9v5 > li').all()
             
-            commenters = set()
-            for uid in raw_user_ids:
-                uid_clean = uid.strip()
-                # 空でない、除外対象でない、かつ有効なユーザーID形式であることを確認
-                if uid_clean and uid_clean.lower() not in exclude_ids and len(uid_clean) > 1:
-                    # 改行が含まれる場合は最初の行のみ取得
-                    uid_clean = uid_clean.split('\n')[0]
-                    if re.match(r'^[a-zA-Z0-9._]+$', uid_clean):
-                        commenters.add(uid_clean)
+            comment_map = {} # user_id -> comment_text_list
+            
+            for container in comment_containers:
+                try:
+                    # ユーザーIDの抽出
+                    id_selector = 'span._ap3a._aaco._aacw._aacx._aad7._aade'
+                    id_elem = container.locator(id_selector).first
+                    if not id_elem.is_visible():
+                        continue
+                    
+                    user_id = id_elem.inner_text().strip().split('\n')[0]
+                    
+                    # 基本チェック
+                    if not user_id or user_id.lower() in exclude_ids or len(user_id) <= 1:
+                        continue
+                    if not re.match(r'^[a-zA-Z0-9._]+$', user_id):
+                        continue
 
-            result_list = list(commenters)
+                    # コメント本文の抽出
+                    text_elems = container.locator('span[dir="auto"]').all()
+                    comment_text = ""
+                    if len(text_elems) > 1:
+                        comment_text = text_elems[1].inner_text().replace("\n", " ").strip()
+                    
+                    if user_id not in comment_map:
+                        comment_map[user_id] = []
+                    
+                    if comment_text:
+                        comment_map[user_id].append(comment_text)
+                except Exception as e:
+                    continue
+
+            # 重複排除とデータ整形
+            result_list = []
+            for uid, texts in comment_map.items():
+                merged_text = " / ".join(texts) if texts else "（本文なし）"
+                result_list.append({
+                    "user_id": uid,
+                    "comment_text": merged_text
+                })
+
             print(f"一意のコメントユーザーを {len(result_list)} 名取得しました。")
-            
-            if not result_list:
-                return [], "成功（コメントなし、または取得不能）"
-                
             return result_list, "成功"
 
         except Exception as e:
