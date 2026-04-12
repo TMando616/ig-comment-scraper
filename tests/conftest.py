@@ -1,0 +1,40 @@
+import pytest
+import os
+import json
+
+@pytest.fixture(scope="session")
+def browser_context_args(browser_context_args):
+    """
+    Playwrightのブラウザコンテキスト引数をカスタマイズし、
+    state.json が存在する場合はセッション情報を読み込みます。
+    """
+    state_file = "state.json"
+    if os.path.exists(state_file):
+        try:
+            print(f"セッションファイル '{state_file}' を読み込みます...")
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            
+            # scraper.py と同様のクッキー補正ロジック
+            if 'cookies' in state:
+                for cookie in state['cookies']:
+                    ss = cookie.get('sameSite')
+                    if ss not in ["Strict", "Lax", "None"]:
+                        if not ss or ss.lower() in ["unspecified", "no_restriction", ""]:
+                            cookie['sameSite'] = "Lax" # デフォルトをLaxに設定
+                        elif ss.capitalize() in ["Strict", "Lax", "None"]:
+                            cookie['sameSite'] = ss.capitalize()
+                        else:
+                            cookie['sameSite'] = "None"
+            
+            return {
+                **browser_context_args,
+                "storage_state": state,
+            }
+        except Exception as e:
+            print(f"セッションファイルの読み込み・補正中にエラーが発生しました: {e}")
+            print("新規コンテキストで続行します。")
+    else:
+        print(f"警告: セッションファイル '{state_file}' が見つかりません。新規コンテキストを使用します。")
+    
+    return browser_context_args
