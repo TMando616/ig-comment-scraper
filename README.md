@@ -37,7 +37,28 @@ docker-compose up -d --build
 docker-compose run --rm app python src/main.py
 ```
 
+## テスト
+プロジェクトに自動テスト（pytest）を導入しています。
+
+### 1. ローカルでのテスト実行（Docker）
+コンテナ内で `pytest` を実行します。
+```bash
+docker compose run --rm app pytest
+```
+
+### 2. CI環境（GitHub Actions）
+`.github/workflows/ci.yml` により、`main` ブランチへのプッシュまたはプルリクエスト時に自動的にテストが実行されます。
+※CI環境には `state.json` が存在しないため、ログインが必要なテストはスキップされます。
+
 ## 詳細な実装内容
+...
+### 4. 自動テスト環境 (`tests/`, `.github/workflows/ci.yml`)
+- **pytest & pytest-playwright**: Playwright を用いたブラウザテストを pytest で実行可能にしました。
+- **共有フィクスチャ (`tests/conftest.py`)**: `browser_context_args` フィクスチャを定義し、テスト間で `state.json` のセッション情報（およびクッキー補正ロジック）を共有できるようにしました。
+- **テストケース (`tests/test_scraper.py`)**:
+  - Instagram のトップページへのアクセスとタイトルの検証。
+  - `state.json` が存在する場合、ログイン状態（ホームアイコン等の表示）を自動検証。存在しない場合はテストをスキップします。
+- **GitHub Actions**: Docker コンテナ内でテストを実行する CI パイプラインを構築。
 
 ### 1. メインロジック (`src/main.py`)
 - `.env` から認証情報（Instagram, Google Sheets）を読み込みます。
