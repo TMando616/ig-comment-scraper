@@ -52,13 +52,18 @@ docker compose run --rm app pytest
 
 ## 詳細な実装内容
 ...
-### 4. 自動テスト環境 (`tests/`, `.github/workflows/ci.yml`)
-- **pytest & pytest-playwright**: Playwright を用いたブラウザテストを pytest で実行可能にしました。
-- **共有フィクスチャ (`tests/conftest.py`)**: `browser_context_args` フィクスチャを定義し、テスト間で `state.json` のセッション情報（およびクッキー補正ロジック）を共有できるようにしました。
-- **テストケース (`tests/test_scraper.py`)**:
-  - Instagram のトップページへのアクセスとタイトルの検証。
-  - `state.json` が存在する場合、ログイン状態（ホームアイコン等の表示）を自動検証。存在しない場合はテストをスキップします。
-- **GitHub Actions**: Docker コンテナ内でテストを実行する CI パイプラインを構築。
+### 4. 自動テスト環境 (`tests/`, `pytest.ini`)
+- **pytest & pytest-playwright**: Playwright を用いたブラウザテストと、ロジックの単体テストを pytest で実行可能です。
+- **共有フィクスチャ (`tests/conftest.py`)**: 
+  - `browser_context_args` フィクスチャを `function` スコープに修正し、`pytest-playwright` との互換性を確保しました。
+  - `state.json` の読み込み成功・失敗や、クッキー補正の実施状況を標準出力（`-s` オプションで確認可能）に表示するように強化しました。
+- **ユニットテスト (`tests/test_unit.py`)**:
+  - `InstagramScraper` の内部ロジック（統計テキストの数値変換など）を、ブラウザを起動せずに検証できるテストを追加しました。
+- **テスト設定 (`pytest.ini`)**:
+  - `PYTHONPATH=src` を設定し、プロジェクトルートから `pytest` を実行するだけで、`src` 配下のモジュールを正しくインポートできるようにしました。
+- **デバッグ機能**:
+  - `test_login_state` が失敗した際、`debug/test_login_failure.png` にスクリーンショットを保存するようにし、原因特定を容易にしました。
+
 
 ### 1. メインロジック (`src/main.py`)
 - `.env` から認証情報（Instagram, Google Sheets）を読み込みます。
