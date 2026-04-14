@@ -22,6 +22,8 @@ def main():
     ig_password = os.getenv("INSTAGRAM_PASSWORD")
     spreadsheet_key = os.getenv("SPREADSHEET_KEY")
     service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
+    target_sheet_name = os.getenv("TARGET_SHEET_NAME", "ターゲット")
+    result_sheet_name = os.getenv("RESULT_SHEET_NAME", "出力結果")
 
     # 必須項目のチェック
     if not all([ig_username, ig_password, spreadsheet_key, service_account_file]):
@@ -29,9 +31,15 @@ def main():
         sys.exit(1)
 
     print(f"=== Instagram Comment Scraper 起動 (取得件数: {target_post_count}) ===")
+    print(f"設定: ターゲットシート='{target_sheet_name}', 出力結果シート='{result_sheet_name}'")
 
     try:
-        ss_manager = SpreadsheetManager(spreadsheet_key, service_account_file)
+        ss_manager = SpreadsheetManager(
+            spreadsheet_key, 
+            service_account_file, 
+            target_sheet_name=target_sheet_name, 
+            result_sheet_name=result_sheet_name
+        )
     except Exception as e:
         print(f"初期化エラー: {e}")
         return

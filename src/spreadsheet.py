@@ -7,7 +7,7 @@ class SpreadsheetManager:
     """
     Googleスプレッドシートの読み書きを管理するクラス
     """
-    def __init__(self, spreadsheet_key: str, service_account_file: str):
+    def __init__(self, spreadsheet_key: str, service_account_file: str, target_sheet_name: str = "ターゲット", result_sheet_name: str = "出力結果"):
         self.scopes: List[str] = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
@@ -19,12 +19,12 @@ class SpreadsheetManager:
         self.client = gspread.authorize(self.credentials)
         self.spreadsheet = self.client.open_by_key(spreadsheet_key)
         
-        # シートの取得（存在しない場合はエラーになるため、事前に名前を確認することを推奨）
+        # シートの取得
         try:
-            self.target_sheet = self.spreadsheet.worksheet("ターゲット")
-            self.result_sheet = self.spreadsheet.worksheet("出力結果")
+            self.target_sheet = self.spreadsheet.worksheet(target_sheet_name)
+            self.result_sheet = self.spreadsheet.worksheet(result_sheet_name)
         except gspread.exceptions.WorksheetNotFound:
-            print("エラー: 'ターゲット' または '出力結果' シートが見つかりません。")
+            print(f"エラー: '{target_sheet_name}' または '{result_sheet_name}' シートが見つかりません。")
             raise
 
     def get_target_user_ids(self) -> List[str]:
