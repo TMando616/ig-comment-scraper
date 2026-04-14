@@ -4,10 +4,9 @@
 Instagramの特定の投稿URLからコメント数を取得し、Googleスプレッドシートに自動で反映させるプロトタイプです。
 
 ## プロジェクト構成
-- `main.py`: メインの実行フロー
+- `main.py`: メインの実行フロー（環境変数の読み込み、全体の制御）
 - `scraper.py`: Playwrightを使用したInstagramのログイン・スクレイピング処理
 - `spreadsheet.py`: gspreadを使用したGoogleスプレッドシートの読み書き
-- `config.py`: 環境変数の読み込み設定
 - `Dockerfile`: 実行環境の定義
 - `docker-compose.yml`: コンテナ実行の定義
 
@@ -67,9 +66,9 @@ docker compose run --rm app pytest
 
 ### 1. メインロジック (`src/main.py`)
 - `.env` から認証情報（Instagram, Google Sheets）を読み込みます。
-- `SpreadsheetManager` を初期化し、スプレッドシートの「ターゲット」シートから処理対象のユーザーIDを取得します。
+- `SpreadsheetManager` を初期化し、環境変数 `TARGET_SHEET_NAME`（デフォルト: ターゲット）で指定されたシートから処理対象のユーザーIDを取得します。
 - `InstagramScraper` を初期化し、Playwright を用いて Instagram にログインします。
-- 各ユーザーIDに対して以下の順序で処理を行い、結果をスプレッドシートの「出力結果」シートに記録します。
+- 各ユーザーIDに対して以下の順序で処理を行い、結果を環境変数 `RESULT_SHEET_NAME`（デフォルト: 出力結果）で指定されたシートに記録します。
   1. ユーザープロフィールの総投稿数と最新最大10件の投稿URLを取得
   2. 各投稿詳細ページを巡回し、コメントコンテナからユーザーIDとコメント内容（本文）のペアを取得
   3. 取得した各ユーザーIDから、InstagramのプロフィールURL（`https://www.instagram.com/{user_id}/`）を自動生成
@@ -97,6 +96,7 @@ docker compose run --rm app pytest
 
 ### 3. スプレッドシート管理 (`src/spreadsheet.py`)
 - `gspread` ライブラリを使用して Google Sheets API と連携します。
+- **柔軟なシート指定**: 読み込み対象の「ターゲット」シートおよび書き出し先の「出力結果」シートの名前を環境変数 (`TARGET_SHEET_NAME`, `RESULT_SHEET_NAME`) で指定可能です。未指定の場合はデフォルト名を使用します。
 - **ターゲットシート**: A列（1行目はヘッダー）からユーザーIDを取得します。
 - **出力結果シート**: [取得日時, ターゲットID, 投稿URL, コメントしたユーザーのID, コメント内容, ユーザーURL, アカウント状態, フォロワー数, フォロー数, プロフィール文, ステータス] の形式で追記します。
 - `append_results`: 複数の行を一括で追記するメソッドを実装。
