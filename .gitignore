@@ -8,6 +8,7 @@ ENV/
 env/
 
 # Environment variables
+*.env
 .env
 state.json
 
