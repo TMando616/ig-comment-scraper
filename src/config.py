@@ -29,6 +29,11 @@ class Config:
     WAIT_TIME_LONG = (3, 7)
     LOGIN_WAIT_TIMEOUT = 60000 # ミリ秒
     
+    # --- ロギング設定 ---
+    LOG_DIR = "logs"
+    LOG_FILE = os.path.join(LOG_DIR, "app.log")
+    LOG_FORMAT = "[%(asctime)s] %(levelname)s: %(message)s"
+    
     # --- デバッグ設定 ---
     DEBUG_DIR = os.getenv("DEBUG_DIR", "debug")
     TRACE_FILE = os.path.join(DEBUG_DIR, "trace.zip")
