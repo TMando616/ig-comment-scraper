@@ -1,44 +1,35 @@
-import os
 import sys
-from dotenv import load_dotenv
+from datetime import datetime
 from playwright.sync_api import sync_playwright
+from config import Config
 from spreadsheet import SpreadsheetManager
 from scraper import InstagramScraper
 
 def main():
-    # .env ファイルの読み込み
-    load_dotenv()
+    # 設定の検証
+    try:
+        Config.validate()
+    except ValueError as e:
+        print(f"エラー: {e}")
+        sys.exit(1)
 
-    # コマンドライン引数から取得投稿数を受け取る（デフォルト3）
-    target_post_count = 3
+    # コマンドライン引数から取得投稿数を受け取る（デフォルトは Config.DEFAULT_TARGET_POST_COUNT）
+    target_post_count = Config.DEFAULT_TARGET_POST_COUNT
     if len(sys.argv) > 1:
         try:
             target_post_count = int(sys.argv[1])
         except ValueError:
-            print(f"警告: 引数 '{sys.argv[1]}' が数値ではありません。デフォルトの 3 を使用します。")
-
-    # 環境変数の取得
-    ig_username = os.getenv("INSTAGRAM_USERNAME")
-    ig_password = os.getenv("INSTAGRAM_PASSWORD")
-    spreadsheet_key = os.getenv("SPREADSHEET_KEY")
-    service_account_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE")
-    target_sheet_name = os.getenv("TARGET_SHEET_NAME", "ターゲット")
-    result_sheet_name = os.getenv("RESULT_SHEET_NAME", "出力結果")
-
-    # 必須項目のチェック
-    if not all([ig_username, ig_password, spreadsheet_key, service_account_file]):
-        print("エラー: .env ファイルに必要な設定が不足しています。")
-        sys.exit(1)
+            print(f"警告: 引数 '{sys.argv[1]}' が数値ではありません。デフォルトの {target_post_count} を使用します。")
 
     print(f"=== Instagram Comment Scraper 起動 (取得件数: {target_post_count}) ===")
-    print(f"設定: ターゲットシート='{target_sheet_name}', 出力結果シート='{result_sheet_name}'")
+    print(f"設定: ターゲットシート='{Config.TARGET_SHEET_NAME}', 出力結果シート='{Config.RESULT_SHEET_NAME}'")
 
     try:
         ss_manager = SpreadsheetManager(
-            spreadsheet_key, 
-            service_account_file, 
-            target_sheet_name=target_sheet_name, 
-            result_sheet_name=result_sheet_name
+            Config.SPREADSHEET_KEY, 
+            Config.GOOGLE_SERVICE_ACCOUNT_FILE, 
+            target_sheet_name=Config.TARGET_SHEET_NAME, 
+            result_sheet_name=Config.RESULT_SHEET_NAME
         )
     except Exception as e:
         print(f"初期化エラー: {e}")
@@ -52,7 +43,12 @@ def main():
     print(f"{len(user_ids)} 名のユーザーを処理します。")
 
     # スクレイパーの初期化
-    scraper = InstagramScraper(ig_username, ig_password)
+    scraper = InstagramScraper(
+        Config.INSTAGRAM_USERNAME, 
+        Config.INSTAGRAM_PASSWORD,
+        state_file=Config.STATE_FILE,
+        debug_dir=Config.DEBUG_DIR
+    )
     
     with sync_playwright() as playwright:
         try:
@@ -60,8 +56,6 @@ def main():
                 print("ログインに失敗したため、処理を中断します。")
                 return
 
-            from datetime import datetime
-            
             for user_id in user_ids:
                 print(f"\n--- ユーザー処理開始: {user_id} ---")
                 
@@ -94,7 +88,7 @@ def main():
                             account_status, followers, following, bio = scraper.get_profile_info(cid)
                             all_rows.append([now, user_id, post_url, cid, c_text, user_url, account_status, followers, following, bio, "成功"])
                     else:
-                        # コメントがない場合も1行記録（またはスキップの判断も可。ここでは記録する）
+                        # コメントがない場合も1行記録
                         all_rows.append([now, user_id, post_url, "-", "-", "-", "-", 0, 0, "", comment_status])
                 
                 # 3. スプレッドシートへ一括書き込み
