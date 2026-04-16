@@ -12,6 +12,9 @@ env/
 .env
 state.json
 
+# Logs
+logs/
+
 # Google Service Account Key
 credentials.json
 
