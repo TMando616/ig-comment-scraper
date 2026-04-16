@@ -2,6 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from typing import List, Dict, Any
 from datetime import datetime
+from logger import logger
 
 class SpreadsheetManager:
     """
@@ -24,7 +25,7 @@ class SpreadsheetManager:
             self.target_sheet = self.spreadsheet.worksheet(target_sheet_name)
             self.result_sheet = self.spreadsheet.worksheet(result_sheet_name)
         except gspread.exceptions.WorksheetNotFound:
-            print(f"エラー: '{target_sheet_name}' または '{result_sheet_name}' シートが見つかりません。")
+            logger.error(f"'{target_sheet_name}' または '{result_sheet_name}' シートが見つかりません。")
             raise
 
     def get_target_user_ids(self) -> List[str]:
@@ -35,8 +36,8 @@ class SpreadsheetManager:
             # A列（1列目）の値をすべて取得し、1行目（ヘッダー）を除外
             values = self.target_sheet.col_values(1)
             return values[1:] if len(values) > 1 else []
-        except Exception as e:
-            print(f"ターゲットユーザーIDの取得中にエラーが発生しました: {e}")
+        except Exception:
+            logger.exception("ターゲットユーザーIDの取得中にエラーが発生しました")
             return []
 
     def append_results(self, rows: List[List[Any]]) -> bool:
@@ -49,8 +50,8 @@ class SpreadsheetManager:
                 return True
             self.result_sheet.append_rows(rows)
             return True
-        except Exception as e:
-            print(f"複数行の結果追記中にエラーが発生しました: {e}")
+        except Exception:
+            logger.exception("複数行の結果追記中にエラーが発生しました")
             return False
 
     def append_result(self, user_id: str, post_url: str, commenter_id: Any, comment_text: str, commenter_url: str, account_status: str, followers: int, following: int, bio: str, status: str) -> bool:
@@ -63,6 +64,6 @@ class SpreadsheetManager:
             row = [now, user_id, post_url, commenter_id, comment_text, commenter_url, account_status, followers, following, bio, status]
             self.result_sheet.append_row(row)
             return True
-        except Exception as e:
-            print(f"結果の追記中にエラーが発生しました ({user_id}): {e}")
+        except Exception:
+            logger.exception(f"結果の追記中にエラーが発生しました ({user_id})")
             return False
