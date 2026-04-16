@@ -5,12 +5,13 @@ import random
 import json
 from playwright.sync_api import sync_playwright, Browser, BrowserContext, Page
 from typing import Optional, Tuple
+from config import Config
 
 class InstagramScraper:
     """
     Instagramのスクレイピングを担当するクラス（デバッグ機能付き）
     """
-    def __init__(self, username: str, password: str, state_file: str = "state.json", debug_dir: str = "debug"):
+    def __init__(self, username: str, password: str, state_file: str = Config.STATE_FILE, debug_dir: str = Config.DEBUG_DIR):
         self.username = username
         self.password = password
         self.state_file = state_file
@@ -93,7 +94,7 @@ class InstagramScraper:
                 self._take_screenshot(page, "login_failed_no_input_found")
                 return False
 
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(*Config.WAIT_TIME_SHORT))
 
             # 4. ログイン情報の入力（state.jsonが無効な場合のフォールバック）
             print(f"ユーザーID: {self.username} でログインを試みます...")
@@ -113,16 +114,16 @@ class InstagramScraper:
             self._take_screenshot(page, "login_input_completed")
             
             # 5. ログインボタンクリック
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(*Config.WAIT_TIME_SHORT))
             login_button = page.locator('button[type="submit"], div[role="button"]').filter(has_text=re.compile(r"^(ログイン|Log in)$")).first
             
             print("ログインボタンをクリックします。")
             login_button.click()
             
             # 6. ログイン完了の待機（待機時間を長めに設定）
-            print("ログイン遷移を待機中（最大60秒）...")
+            print(f"ログイン遷移を待機中（最大 {Config.LOGIN_WAIT_TIMEOUT/1000} 秒）...")
             try:
-                page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=60000)
+                page.wait_for_selector('svg[aria-label="ホーム"], svg[aria-label="Home"]', timeout=Config.LOGIN_WAIT_TIMEOUT)
                 
                 # ログイン成功後に邪魔なポップアップがあれば閉じる（「情報を保存」など）
                 time.sleep(3)
@@ -146,11 +147,6 @@ class InstagramScraper:
             print(f"ログイン処理中に重大なエラーが発生しました: {e}")
             return False
 
-        except Exception as e:
-            print(f"ログイン処理中にエラーが発生しました: {e}")
-            self._take_screenshot(page, "error_login_failed")
-            return False
-
     def get_post_count(self, page: Page) -> int:
         """
         プロフィールページから総投稿数を取得する。
@@ -158,7 +154,6 @@ class InstagramScraper:
         """
         try:
             # 投稿数を含む要素を探す (例: "123 投稿" または "123 posts")
-            # セレクタは変更されやすいため、正規表現でテキストから抽出を試みる
             post_count_elem = page.query_selector('header li:first-child span')
             if not post_count_elem:
                 # 別のパターンを試行
@@ -176,7 +171,7 @@ class InstagramScraper:
             print(f"投稿数取得中にエラーが発生しました: {e}")
             return 0
 
-    def get_recent_post_urls(self, user_id: str, max_posts: int = 10) -> Tuple[list[str], int, str]:
+    def get_recent_post_urls(self, user_id: str, max_posts: int = Config.MAX_RECENT_POSTS) -> Tuple[list[str], int, str]:
         """
         指定されたユーザーIDのプロフィールから最新の投稿URLリスト（最大 max_posts 件）と総投稿数を取得する
         """
@@ -194,14 +189,14 @@ class InstagramScraper:
                 return [], 0, "失敗: ユーザーが存在しません"
             
             page.wait_for_load_state("networkidle")
-            time.sleep(random.uniform(2, 4))
+            time.sleep(random.uniform(*Config.WAIT_TIME_MEDIUM))
             self._take_screenshot(page, f"step3_profile_{user_id}")
 
             # 総投稿数を取得
             total_posts = self.get_post_count(page)
             print(f"総投稿数: {total_posts}")
 
-            if page.query_selector('text="このアカウントは非公開です"'):
+            if page.query_selector('text="このアカウントは非公開です"') or page.query_selector('text="This account is private"'):
                 return [], 0, "失敗: 非公開アカウント"
 
             # 投稿URLを収集
@@ -230,45 +225,6 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def get_latest_post_url(self, user_id: str) -> Tuple[Optional[str], str]:
-        """
-        指定されたユーザーIDのプロフィールから最新投稿のURLを取得する
-        """
-        if not self.context:
-            return None, "エラー: 未ログイン"
-
-        page: Page = self.context.new_page()
-        profile_url = f"https://www.instagram.com/{user_id}/"
-        try:
-            print(f"プロフィールにアクセス中: {profile_url}")
-            response = page.goto(profile_url)
-            
-            if response.status == 404:
-                self._take_screenshot(page, f"error_404_{user_id}")
-                return None, "失敗: ユーザーが存在しません"
-            
-            page.wait_for_load_state("networkidle")
-            time.sleep(3)
-            time.sleep(random.uniform(2, 4))
-            self._take_screenshot(page, f"step3_profile_{user_id}")
-
-            post_link = page.query_selector('a[href*="/p/"], a[href*="/reel/"]')
-            
-            if post_link:
-                href = post_link.get_attribute("href")
-                full_url = f"https://www.instagram.com{href}"
-                print(f"最新投稿URLを取得しました: {full_url}")
-                return full_url, "成功"
-            else:
-                if page.query_selector('text="このアカウントは非公開です"'):
-                    return None, "失敗: 非公開アカウント"
-                return None, "失敗: 投稿が見つかりません（0件の可能性）"
-
-        except Exception as e:
-            return None, f"失敗: プロフィール取得エラー ({str(e)})"
-        finally:
-            page.close()
-
     def get_commenting_users(self, post_url: str, target_user_id: str = "") -> Tuple[list[dict], str]:
         """
         指定された投稿URLから、コメントしているユーザーのIDとコメント内容のリストを取得する。
@@ -281,7 +237,7 @@ class InstagramScraper:
             print(f"投稿にアクセス中: {post_url}")
             page.goto(post_url)
             page.wait_for_load_state("networkidle")
-            time.sleep(random.uniform(3, 5))
+            time.sleep(random.uniform(*Config.WAIT_TIME_LONG))
             
             # URLからスラッグを抽出してデバッグ用に使用
             post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
@@ -359,70 +315,6 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def get_comment_count(self, post_url: str) -> Tuple[Optional[int], str]:
-        """
-        指定された投稿URLからコメント数を取得する。
-        「コメント...件をすべて見る」ボタンのテキストから数値を抽出。
-        """
-        if not self.context:
-            return None, "エラー: 未ログイン"
-
-        page: Page = self.context.new_page()
-        try:
-            print(f"投稿にアクセス中: {post_url}")
-            page.goto(post_url)
-            page.wait_for_load_state("networkidle")
-            time.sleep(random.uniform(3, 5))
-            
-            # URLからスラッグを抽出してファイル名に使用
-            post_id = post_url.split('/')[-2] if post_url.endswith('/') else post_url.split('/')[-1]
-            self._take_screenshot(page, f"step4_post_{post_id}")
-
-            # 1. 指定されたセレクタで2番目の要素を特定
-            comment_buttons = page.locator('span[role="button"].x1ypdohk, span[role="button"].x1s688f')
-            
-            # 2. テキストの抽出と数値化
-            count = 0
-            # 「いいね」ボタンと重複するため、2番目（index: 1）をターゲットにする
-            if comment_buttons.count() > 1:
-                target_button = comment_buttons.nth(1)
-                text = target_button.inner_text()
-                print(f"コメントボタン（2番目）のテキスト: {text}")
-                
-                # 正規表現で数値を抽出
-                match = re.search(r'([\d,]+)', text)
-                if match:
-                    count_str = match.group(1).replace(',', '')
-                    count = int(count_str)
-                    print(f"抽出されたコメント数: {count}")
-            else:
-                print(f"十分な数のコメントボタンが見つかりません（取得数: {comment_buttons.count()}）。")
-                
-                # フォールバック: ボタンが1つしかない場合、それが目的の要素である可能性を試す
-                if comment_buttons.count() == 1:
-                    text = comment_buttons.first.inner_text()
-                    match = re.search(r'([\d,]+)', text)
-                    if match:
-                        count = int(match.group(1).replace(',', ''))
-                        print(f"最初のボタンから抽出されたコメント数: {count}")
-
-                # 最終的な保険としてメタデータからも抽出
-                if count == 0:
-                    meta_desc = page.get_attribute('meta[property="og:description"]', 'content')
-                    if meta_desc:
-                        match = re.search(r'([\d,]+)\s*(件のコメント|Comments)', meta_desc)
-                        if match:
-                            count = int(match.group(1).replace(',', ''))
-                            print(f"メタデータから抽出されたコメント数: {count}")
-
-            return count, "成功"
-
-        except Exception as e:
-            print(f"コメント数取得中にエラーが発生しました（0として扱います）: {e}")
-            return 0, f"警告: 取得エラー ({str(e)})"
-        finally:
-            page.close()
-
     def _convert_stat_to_int(self, text: str) -> int:
         """
         Instagramの統計テキスト（"1.2k", "1,500"等）を数値(int)に変換する。
@@ -457,7 +349,7 @@ class InstagramScraper:
         profile_url = f"https://www.instagram.com/{user_id}/"
         try:
             # Bot検知回避のためのランダム待機（遷移前）
-            time.sleep(random.uniform(2, 5))
+            time.sleep(random.uniform(*Config.WAIT_TIME_MEDIUM))
             
             print(f"プロフィール情報を確認中: {profile_url}")
             response = page.goto(profile_url)
@@ -467,7 +359,7 @@ class InstagramScraper:
             
             # ページ読み込み後のランダム待機（遷移後）
             page.wait_for_load_state("networkidle")
-            time.sleep(random.uniform(2, 5))
+            time.sleep(random.uniform(*Config.WAIT_TIME_MEDIUM))
             
             # 1. 非公開アカウントの判定
             is_private = False
@@ -518,9 +410,8 @@ class InstagramScraper:
 
             # 3. プロフィール文（Bio）の取得
             bio_text = ""
-            # プロフィール文が含まれる一般的なセレクタ
             bio_selectors = [
-                'header section div:has-text("プロフィール") + div span', # 日本語設定
+                'header section div:has-text("プロフィール") + div span',
                 'header section div.x78zum5.x1q0g3np.xieb34t span[dir="auto"]',
                 'main header section > div:nth-child(3) span'
             ]
@@ -529,7 +420,6 @@ class InstagramScraper:
                 bio_elem = page.locator(sel).first
                 if bio_elem.is_visible():
                     raw_bio = bio_elem.inner_text()
-                    # 改行を " / " に置換してスプレッドシートで見やすくする
                     bio_text = raw_bio.replace("\n", " / ").strip()
                     if bio_text: break
 
@@ -542,19 +432,11 @@ class InstagramScraper:
         finally:
             page.close()
 
-    def is_private_account(self, user_id: str) -> str:
-        """
-        互換性のために残すメソッド。内部で get_profile_info を呼び出す。
-        """
-        status, _, _, _ = self.get_profile_info(user_id)
-        return status
-
     def stop_tracing(self):
         """トレースを停止して保存する"""
         if self.context:
-            trace_path = os.path.join(self.debug_dir, "trace.zip")
-            self.context.tracing.stop(path=trace_path)
-            print(f"トレースログを保存しました: {trace_path}")
+            self.context.tracing.stop(path=Config.TRACE_FILE)
+            print(f"トレースログを保存しました: {Config.TRACE_FILE}")
 
     def close(self):
         if self.browser:
